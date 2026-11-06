@@ -23,9 +23,7 @@ The water cycle in 3D (evaporation, condensation, precipitation, runoff and grou
 - 🌊 Runoff, infiltration and groundwater back to the sea
 - 🌳 Plants by vegetation zone, swaying with the wind
 - 🌫️ Sea mist near saturation, ripples where rain meets water
-- 🌡️ Live dew point, cloud base, lapse rate and water budget
 - 🎓 Teach mode, one stage at a time
-- 📴 Works offline as a single HTML file
 
 ---
 
