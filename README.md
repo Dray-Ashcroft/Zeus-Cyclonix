@@ -9,7 +9,7 @@
 The water cycle in 3D (evaporation, condensation, precipitation, runoff and groundwater), driven by real atmospheric physics and built for classroom smart panels.
 
 <p align="center">
-  <a href="https://zeus-cyclonix.pages.dev"><strong>Enter the Cycle →</strong></a>
+  <a href="https://zeus-cyclonix.pages.dev"><strong>Enter the Vortex 🌀</strong></a>
 </p>
 
 ---
