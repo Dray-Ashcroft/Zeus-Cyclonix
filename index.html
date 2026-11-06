@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zeus Cyclonix · Water Cycle Simulator</title>
+<meta name="description" content="Interactive 3D water cycle simulator: evaporation, condensation, precipitation, runoff and groundwater.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app" data-tab="none">
+  <div id="stage" aria-label="3D water cycle scene. Drag to rotate, pinch or scroll to zoom. Tap a cloud to look inside it.">
+    <div id="storm"></div>
+    <div id="labels"></div>
+    <svg id="magline" aria-hidden="true"><line id="magline-l" x1="0" y1="0" x2="0" y2="0" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/><circle id="magline-c" r="5" fill="currentColor"/></svg>
+    <div class="ovbar">
+      <button class="btn icon-btn" id="btn-credits" aria-label="Credits" title="Credits" style="font-size:19px;font-weight:600">©</button>
+      <button class="btn icon-btn" id="btn-fs" data-ia="fullscreen" hidden><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M182.15-182.15h101.33q14.39 0 24.35 9.87 9.95 9.87 9.95 24.37 0 14.5-9.95 24.19-9.96 9.7-24.35 9.7H148.09q-14.43 0-24.25-9.82t-9.82-24.25v-135.39q0-14.39 9.87-24.35 9.87-9.95 24.37-9.95 14.5 0 24.2 9.95 9.69 9.96 9.69 24.35v101.33Zm595.7 0v-101.33q0-14.39 9.87-24.35 9.87-9.95 24.35-9.95 14.48 0 24.31 9.95 9.84 9.96 9.84 24.35v135.39q0 14.43-9.96 24.25-9.95 9.82-24.35 9.82H676.85q-14.75 0-24.57-9.87t-9.82-24.37q0-14.5 9.82-24.2 9.82-9.69 24.48-9.69h101.09Zm-595.7-595.7v101.09q0 14.66-9.87 24.48t-24.37 9.82q-14.5 0-24.19-9.82-9.7-9.82-9.7-24.57v-135.06q0-14.4 9.82-24.35 9.82-9.96 24.25-9.96h135.39q14.39 0 24.35 10.01 9.95 10.02 9.95 24.49 0 14.48-9.95 24.18-9.96 9.69-24.35 9.69H182.15Zm595.7 0H676.76q-14.66 0-24.48-9.87t-9.82-24.35q0-14.48 9.82-24.31 9.82-9.84 24.57-9.84h135.06q14.4 0 24.35 9.96 9.96 9.95 9.96 24.35v135.06q0 14.75-10.01 24.57-10.02 9.82-24.49 9.82-14.48 0-24.18-9.82-9.69-9.82-9.69-24.48v-101.09Z"/></svg></button>
+      <button class="btn" id="btn-whole" data-i="whole">Whole cycle</button>
+    </div>
+    <div class="ov panel" id="thermo">
+      <div class="th-title" data-i="th_title">Air cools with height</div>
+      <div class="th-body"><div class="th-bar" id="th-bar"></div><div id="th-ticks"></div></div>
+      <div class="th-note" data-i="th_note">Surrounding air: about 6.5 °C colder per km</div>
+    </div>
+    <div class="ov panel k-evap" id="teach" hidden>
+      <div class="tstep" id="t-step">Step 1 of 3</div>
+      <div class="tbtns"><button class="btn primary big" id="t-next">Next</button><button class="btn" id="t-exit" data-i="exit">Exit</button></div>
+      <div class="tname" id="t-name">Evaporation</div>
+      <p class="tcap" id="t-cap"></p>
+      <p class="thint" id="t-hint"></p>
+    </div>
+    <div class="ov panel" id="credits" hidden role="dialog" aria-labelledby="cr-title">
+      <div class="qhead"><h2 class="cr-h" id="cr-title">© Credits</h2><button class="btn" id="cr-close">Close</button></div>
+      <div class="cr-designer">
+        <div class="cr-role">Project Designer</div>
+        <div class="cr-name">Sai Prasad</div>
+        <div class="cr-cred">Msc. Ag. Entomology, NET</div>
+        <div class="cr-help">In assistance with Claude Opus 5.5</div>
+      </div>
+      <p class="cr-sub">3D models from Sketchfab, used under their creators' licences. Thank you to each designer.</p>
+      <ul class="cr-list">
+        <li><b>Water cycle landscape</b> · “Water Cycle (Animated)”, created by <b>RODX81</b>, shared by Clement Abai (@clement.abai) · CC BY 4.0
+          <a href="https://sketchfab.com/3d-models/water-cycle-animated-203e16058fa94e618829447db71ddba4" target="_blank" rel="noopener">Source</a></li>
+        <li><b>Sun</b> · “Sun with 2K Textures” by <b>ayushcodemate</b>
+          <a href="https://sketchfab.com/3d-models/sun-with-2k-textures-bac9e8f95040484bb86f1deb9bd6fe95" target="_blank" rel="noopener">Source</a></li>
+        <li><b>Clouds</b> · “Fluffy Cloud” by <b>Loïc Norgeot</b> (@norgeotloic) · CC BY 4.0
+          <a href="https://sketchfab.com/3d-models/fluffy-cloud-2c887a28840f47cfae6b5dee0d11b842" target="_blank" rel="noopener">Source</a></li>
+        <li><b>Snow</b> · “Looping Snow 2” by <b>Elin</b> (@ElinHohler) · CC BY 4.0
+          <a href="https://sketchfab.com/3d-models/looping-snow-2-939d059c7a43424f93c3e8e44e1d5489" target="_blank" rel="noopener">Source</a></li>
+        <li><b>Raindrops</b> · “drop of water” by <b>furret</b> (@ff.ferretti02) · CC BY 4.0
+          <a href="https://sketchfab.com/3d-models/drop-of-water-dcbdc5e8905449ad95a47720e4d3c57c" target="_blank" rel="noopener">Source</a></li>
+        <li><b>Sea waves and river</b> · “Water Animation” by <b>Artise1</b> · CC BY 4.0
+          <a href="https://sketchfab.com/3d-models/water-animation-e54ff76bef854b128af8d20cf9c03729" target="_blank" rel="noopener">Source</a></li>
+      </ul>
+      <p class="cr-note"><b>Changes made:</b> the models were compressed, resized and re-coloured for this simulator; the landscape's magma layer is repainted as rock, its own sun, clouds and raindrops are replaced by the models above, and the cloud uses fewer layers.</p>
+      <p class="cr-note">Also used: three.js 3D engine (MIT), IBM Plex fonts (SIL Open Font Licence), Material Symbols icons by Google (Apache 2.0). CC BY 4.0: <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">creativecommons.org/licenses/by/4.0</a></p>
+    </div>
+    <div class="ov panel" id="mag" hidden role="dialog" aria-label="Inside a cloud">
+      <div class="mtitle" data-i="mag_title">Inside a cloud</div>
+      <button class="btn icon-btn mclose" id="mag-close" data-ia="close"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M480-432.26 272.87-225.13q-10.2 10.2-23.87 10.2-13.67 0-23.87-10.2-10.2-10.2-10.2-23.87 0-13.67 10.2-23.87L432.26-480 225.13-687.13q-10.2-10.2-10.2-23.87 0-13.67 10.2-23.87 10.2-10.2 23.87-10.2 13.67 0 23.87 10.2L480-527.74l207.13-207.13q10.2-10.2 23.87-10.2 13.67 0 23.87 10.2 10.2 10.2 10.2 23.87 0 13.67-10.2 23.87L527.74-480l207.13 207.13q10.2 10.2 10.2 23.87 0 13.67-10.2 23.87-10.2 10.2-23.87 10.2-13.67 0-23.87-10.2L480-432.26Z"/></svg></button>
+      <canvas id="mag-cv" width="300" height="300"></canvas>
+      <p class="mcap" id="mag-cap"></p>
+      <p class="mnote" data-i="mag_note">Not to scale</p>
+    </div>
+    <div class="toast" id="toast" aria-live="polite"></div>
+    <div id="loader"><div class="box"><div id="load-msg">Loading the landscape…</div><div class="bar"><i id="load-bar"></i></div></div></div>
+  </div>
+
+  <div class="ui" id="ui">
+    <div class="col-left">
+      <header class="brand panel">
+        <span class="logo" aria-hidden="true"><svg viewBox="0 -960 960 960" focusable="false"><defs><linearGradient id="vx" x1="0" y1="-960" x2="960" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="var(--glow-a)"/><stop offset="1" stop-color="var(--glow-b)"/></linearGradient></defs><path fill="url(#vx)" d="M480-327.37q-62.96 0-107.79-44.84-44.84-44.83-44.84-107.79 0-63.96 44.84-108.29 44.83-44.34 107.79-44.34 63.96 0 108.29 44.34 44.34 44.33 44.34 108.29 0 62.96-44.34 107.79-44.33 44.84-108.29 44.84Zm0-65.26q36.8 0 62.09-25.78 25.28-25.79 25.28-61.59 0-36.8-25.28-62.09-25.29-25.28-62.09-25.28-35.8 0-61.59 25.28-25.78 25.29-25.78 62.09 0 35.8 25.78 61.59 25.79 25.78 61.59 25.78Zm0 240.13q-118.28 0-209.71-14.16-91.42-14.17-153.66-30.69-15.2-4-25.91-15.95Q80-225.26 80-241.46q0-13.19 11.34-20.79 11.33-7.6 25.29-3.36 44.17 12.81 84.92 20.95 40.75 8.14 62.52 11.9-53.57-44.04-82.57-113.02-29-68.98-29-134.22 0-114.93 14.16-206.84 14.17-91.9 30.93-156.05 4-15.44 15.83-26.27Q225.26-880 241.46-880q13.19 0 20.79 11.1t3.6 25.29q-12.57 44.18-19.97 84.28-7.4 40.11-10.4 61.16 46.8-53.09 111.97-81.21Q412.61-807.5 480-807.5q117.57 0 208.99 14.28 91.42 14.29 154.14 30.57 15.2 4.24 26.03 16.07Q880-734.74 880-718.54q0 12.95-11.22 20.55-11.21 7.6-25.17 3.36-44.41-12.8-84.4-20.83-39.99-8.02-61.28-10.78 56.53 50.67 83.05 114.76Q807.5-547.39 807.5-480q0 117.33-14.04 208.99-14.05 91.66-30.81 154.38-4 15.2-15.95 25.91Q734.74-80 718.54-80q-12.95 0-21.05-11.22-8.1-11.21-3.86-25.17 12.57-43.94 20.59-83.81 8.02-39.87 11.78-61.63-50.52 57.05-115.88 83.19Q544.76-152.5 480-152.5Zm0-65.5q109 0 185.5-76.5T742-480q0-109-76.5-185.5T480-742q-109 0-185.5 76.5T218-480q0 109 76.5 185.5T480-218Z"/></svg></span>
+        <div class="brand-t"><h1>Zeus Cyclonix</h1><p class="sub" data-i="sub">Water Cycle Simulator</p></div>
+      </header>
+
+      <nav class="procs" aria-label="Processes">
+        <button class="chip k-evap" id="chip-evap" data-p="evap" aria-pressed="false" data-ia="chip_evap">
+          <span class="num"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M529.11-123.98q-5.48 4.48-11.7 6.72-6.21 2.24-11.93 2.24-6.96 0-12.8-2.36-5.83-2.36-11.31-8.08-41.96-43.47-62.44-90.43-20.47-46.96-20.47-98.15 0-36.48 11.24-77.46 11.23-40.98 39.71-111.17 25.76-59.53 34.88-91.91 9.12-32.38 9.12-59.62 0-37.04-16.38-69.68-16.38-32.64-51.14-64.16-5.48-5.48-7.72-11.82-2.24-6.34-2.24-13.05 0-5.72 1.74-11.56 1.74-5.83 6.22-11.31 5.48-5.48 11.82-7.96 6.33-2.48 13.05-2.48 5.72 0 12.06 2.24 6.33 2.24 11.81 6.96 44.96 41.95 66.94 86.91 21.97 44.96 21.97 95.91 0 34.72-10.24 73.06-10.23 38.34-38.23 104.81-26.24 61.24-36.36 96.38-10.12 35.15-10.12 64.91 0 38.76 15.88 73.9 15.88 35.14 48.88 69.66 4.48 5.48 6.33 11.2 1.86 5.71 1.86 11.67 0 6.72-2.47 13.06-2.48 6.33-7.96 11.57Zm204.67 1q-5.48 4.48-11.31 6.22-5.84 1.74-11.56 1.74-6.95 0-13.17-2.24t-11.7-7.96q-41.71-43.71-62.19-90.29-20.48-46.58-20.48-97.53 0-36.48 11.12-77.46t39.6-111.17q25.76-59.53 34.88-91.91 9.12-32.38 9.12-59.62 0-37.04-16.38-69.06t-51.14-64.78q-5.48-5.48-7.46-11.32-1.98-5.84-1.98-12.55 0-5.96 1.86-12.18 1.86-6.21 6.58-11.69 5.47-5.72 11.81-8.08 6.34-2.36 13.05-2.36 5.72 0 11.44 1.74t11.2 6.46q45.19 41.95 67.17 86.91 21.98 44.96 21.98 95.91 0 35.48-10.74 75.48-10.74 40-37.98 103.39-26.24 59.76-36.12 95.03-9.88 35.26-9.88 65.26 0 38.76 15.64 74.78t48.64 69.54q4.48 5.48 6.34 11.2 1.86 5.72 1.86 11.67 0 6.72-2.48 13.06-2.48 6.33-7.72 11.81Zm-409.35 0q-5.47 4.48-11.43 6.22-5.96 1.74-11.67 1.74-6.72 0-12.94-2.24t-11.69-7.96q-41.72-43.71-62.2-90.29-20.48-46.58-20.48-97.53 0-36.48 11.12-77.46t39.6-111.17q26-59.53 35-91.91 9-32.38 9-59.62 0-37.04-16.38-69.06t-50.9-64.78q-5.48-5.48-7.96-11.82-2.48-6.34-2.48-13.05 0-5.72 1.86-12.06 1.86-6.33 6.34-11.81 5.48-5.48 11.69-8.46 6.22-2.98 13.18-2.98 5.71 0 12.05 2.36 6.34 2.36 11.82 7.84 44.71 41.95 66.81 86.91 22.1 44.96 22.1 95.91 0 34.72-10.74 74.06t-37.98 104.81q-25 59.53-35.12 94.53-10.12 35-10.12 65.76 0 39.76 15.88 75.28t47.64 69.04q4.48 5.48 6.34 11.2 1.86 5.72 1.86 11.67 0 6.72-2.36 13.06-2.36 6.33-7.84 11.81Z"/></svg><b class="n">1</b></span>
+          <span class="st"><span class="meter"><i id="m-evap"></i></span><span id="s-evap">–</span></span>
+        </button>
+        <button class="chip k-cond" id="chip-cond" data-p="cond" aria-pressed="false" data-ia="chip_cond">
+          <span class="num"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M251.48-154.02q-90.15 0-153.57-63.06Q34.5-280.13 34.5-370.52q0-79.44 50.24-140.23 50.24-60.79 128.43-73.27 20.96-97.72 95.92-159.46 74.95-61.74 172.91-61.74 112.96 0 191.15 81.74 78.2 81.74 80.11 196.46v24q72.72.15 122.48 49.85 49.76 49.69 49.76 124.65 0 71.63-51.43 123.06-51.44 51.44-123.07 51.44H251.48Z"/></svg><b class="n">2</b></span>
+          <span class="st"><span class="meter"><i id="m-cond"></i></span><span id="s-cond">–</span></span>
+        </button>
+        <button class="chip k-prec" id="chip-prec" data-p="prec" aria-pressed="false" data-ia="chip_prec">
+          <span class="num"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M559.91-72.48q-12.91 5.72-26.96 1.24-14.06-4.48-19.78-17.15l-69-138q-5.71-12.68-1.62-26.61 4.1-13.93 16.78-19.89 12.67-5.72 26.72-1.24 14.06 4.48 19.78 17.15l69 138q5.71 12.68 1.74 26.73-3.98 14.05-16.66 19.77Zm240-1q-12.91 5.72-26.96 1.24-14.06-4.48-19.78-17.15l-69-138q-5.71-12.68-1.62-26.61 4.1-13.93 16.78-19.89 12.67-5.72 26.72-1.24 14.06 4.48 19.78 17.15l69 138q5.71 12.68 1.74 26.73-3.98 14.05-16.66 19.77Zm-480 0q-12.91 5.72-26.96 1.74-14.06-3.98-19.78-16.65l-69-138q-5.71-12.68-1.12-26.61 4.6-13.93 17.28-19.89 12.67-5.72 26.72-1.74 14.06 3.98 19.78 16.65l69 139q5.71 12.68 1.24 26.23-4.48 13.55-17.16 19.27ZM290-338.57q-88.67 0-151.37-62.81-62.7-62.82-62.7-151.25 0-80.2 56.86-143.15 56.86-62.96 141.58-69.68 32.72-56 85.93-88.74 53.22-32.73 119.7-32.73 91.48 0 153.82 57.61 62.33 57.62 77.53 142.86 79.72 4.96 126.22 55.42 46.5 50.45 46.5 118.41 0 71.67-50.7 122.87-50.7 51.19-123.37 51.19H290Z"/></svg><b class="n">3</b></span>
+          <span class="st"><span class="meter"><i id="m-prec"></i></span><span id="s-prec">–</span></span>
+        </button>
+      </nav>
+
+      <div class="tabbar panel" role="tablist" aria-label="Panels">
+        <button class="tab tab-ic tab-controls" role="tab" id="tab-controls" data-tab="controls" aria-selected="false" aria-label="Controls" title="Controls"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M458.26-114.5q-14.02 0-23.36-9.3-9.33-9.3-9.33-23.33v-165.24q0-14.03 9.51-23.33 9.51-9.3 23.53-9.3 14.02 0 23.24 9.3 9.22 9.3 9.22 23.33V-262h320.36q14.04 0 23.34 9.35t9.3 23.46q0 14.02-9.3 23.35-9.3 9.34-23.34 9.34H491.07v49.37q0 14.03-9.35 23.33-9.35 9.3-23.46 9.3Zm-309.69-82q-14.04 0-23.34-9.51t-9.3-23.53q0-14.03 9.3-23.24 9.3-9.22 23.34-9.22H335.8q14.04 0 23.34 9.35 9.29 9.35 9.29 23.46 0 14.02-9.29 23.35-9.3 9.34-23.34 9.34H148.57Zm187.06-168.87q-14.02 0-23.36-9.46t-9.34-23.41v-49.13H148.57q-13.8 0-23.22-9.47-9.42-9.46-9.42-23.34 0-13.87 9.42-23.16 9.42-9.29 23.22-9.29h154.36V-564q0-14.04 9.52-23.33 9.51-9.3 23.53-9.3 14.02 0 23.24 9.3 9.21 9.29 9.21 23.33v166q0 14.04-9.34 23.33-9.35 9.3-23.46 9.3Zm122.57-82q-13.8 0-23.22-9.47-9.41-9.46-9.41-23.34 0-13.87 9.41-23.16 9.42-9.29 23.22-9.29h353.23q13.8 0 23.22 9.47 9.42 9.46 9.42 23.34 0 13.87-9.42 23.16-9.42 9.29-23.22 9.29H458.2ZM624.26-615q-14.02 0-23.36-9.3-9.33-9.3-9.33-23.33v-165.24q0-14.03 9.51-23.33 9.51-9.3 23.53-9.3 14.02 0 23.24 9.3 9.22 9.3 9.22 23.33v49.37h154.36q14.04 0 23.34 9.35t9.3 23.46q0 14.02-9.3 23.35-9.3 9.34-23.34 9.34H657.07v50.37q0 14.03-9.35 23.33-9.35 9.3-23.46 9.3Zm-475.69-83q-14.04 0-23.34-9.51t-9.3-23.54q0-14.02 9.3-23.23 9.3-9.22 23.34-9.22H501.8q14.04 0 23.34 9.35 9.29 9.35 9.29 23.46 0 14.02-9.29 23.35-9.3 9.34-23.34 9.34H148.57Z"/></svg></button>
+        <button class="tab tab-ic" role="tab" id="tab-data" data-tab="data" aria-selected="false" aria-label="Data" title="Data"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M694.78-154.02q-14.66 0-24.48-9.82t-9.82-24.25v-220.24q0-14.42 9.82-24.36t24.48-9.94h77.13q14.43 0 24.37 9.94 9.94 9.94 9.94 24.36v220.24q0 14.43-9.94 24.25t-24.37 9.82h-77.13Zm-253.35 0q-14.42 0-24.24-9.82-9.82-9.82-9.82-24.25v-583.82q0-14.43 9.82-24.37 9.82-9.94 24.24-9.94h77.14q14.42 0 24.24 9.94 9.82 9.94 9.82 24.37v583.82q0 14.43-9.82 24.25t-24.24 9.82h-77.14Zm-253.34 0q-14.43 0-24.25-9.82t-9.82-24.25v-383.82q0-14.43 9.82-24.37 9.82-9.94 24.25-9.94h77.37q14.42 0 24.24 9.94 9.82 9.94 9.82 24.37v383.82q0 14.43-9.82 24.25t-24.24 9.82h-77.37Z"/></svg></button>
+      </div>
+
+      <div class="panes panel">
+        <section class="pane" id="pane-data" role="tabpanel" aria-labelledby="tab-data">
+          <h2 class="sec-h" data-i="atm">Atmosphere</h2>
+          <dl class="rows">
+            <dt data-i="r_td">Dew point</dt><dd id="r-td">–</dd>
+            <dt data-i="r_lcl">Cloud base height</dt><dd id="r-lcl">–</dd>
+            <dt data-i="r_tc">Rising air at cloud base</dt><dd id="r-tc">–</dd>
+            <dt data-i="r_plains">Over the plains</dt><dd id="r-type1" class="hi">–</dd>
+            <dt data-i="r_peaks">Over the peaks</dt><dd id="r-type2" class="hi">–</dd>
+          </dl>
+          <div class="sep"></div>
+          <h2 class="sec-h" data-i="budget">Water budget · parcels</h2>
+          <dl class="rows">
+            <dt data-i="b_e">Evaporated + transpired</dt><dd id="b-e">0</dd>
+            <dt data-i="b_v">Rising as vapour now</dt><dd id="b-v">0</dd>
+            <dt data-i="b_c">Held in clouds now</dt><dd id="b-c">0</dd>
+            <dt data-i="b_p">Fallen as rain or snow</dt><dd id="b-p">0</dd>
+          </dl>
+          <p class="note" data-i="b_note">Water is never used up. It only changes state and place.</p>
+          <div class="sep"></div>
+          <h2 class="sec-h" data-i="key">Key</h2>
+          <div class="legend">
+            <span><i class="sw vap"></i><span data-i="k_vap">Water vapour (an invisible gas, drawn as faint mist)</span></span>
+            <span><i class="sw drop"></i><span data-i="k_drop">Cloud droplet (liquid)</span></span>
+            <span><i class="sw rain"></i><span data-i="k_rain">Raindrop</span></span>
+            <span><i class="sw snow"></i><span data-i="k_snow">Snowflake (ice)</span></span>
+            <span><i class="sw flow"></i><span data-i="k_flow">Runoff and groundwater</span></span>
+          </div>
+          <p class="note" data-i="scale_note">Scene heights are not to scale. Readings are calculated from the sliders.</p>
+          <div class="pane-acts"><button class="btn" id="btn-credits2">© Credits</button></div>
+        </section>
+      </div>
+    </div>
+
+    <div class="dock panel" role="group" aria-label="Controls">
+      <button class="ib play" id="btn-play" aria-label="Pause" title="Pause (or tap the sky)"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M620.42-189q-28.17 0-48.23-20.08-20.06-20.09-20.06-48.29v-445.26q0-28.2 20.06-48.29Q592.25-771 620.43-771h55q28.17 0 48.18 20.08 20.02 20.09 20.02 48.29v445.26q0 28.2-20.02 48.29Q703.59-189 675.42-189h-55Zm-335.76 0q-28.18 0-48.23-20.08-20.06-20.09-20.06-48.29v-445.26q0-28.2 20.06-48.29Q256.49-771 284.66-771h55q28.18 0 48.19 20.08 20.02 20.09 20.02 48.29v445.26q0 28.2-20.02 48.29Q367.83-189 339.66-189h-55Z"/></svg></button>
+      <button class="ib spd" id="btn-speed" aria-label="Simulation speed" title="Simulation speed">1×</button>
+      <span class="vsep" aria-hidden="true"></span>
+      <label class="sl" title="Sun's heat · air temperature"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M557.87-577.37q-14.12 0-23.54-9.42-9.42-9.41-9.42-23.34 0-13.92 9.45-23.21 9.45-9.29 23.42-9.29h172.87q13.87 0 23.25 9.42 9.38 9.41 9.38 23.34 0 13.92-9.38 23.21-9.38 9.29-23.25 9.29H557.87Zm-.09-125.26q-13.97 0-23.42-9.51-9.45-9.52-9.45-23.49 0-13.97 9.45-23.36 9.45-9.38 23.42-9.38h262.87q13.87 0 23.25 9.51 9.38 9.52 9.38 23.58 0 13.98-9.38 23.31-9.38 9.34-23.25 9.34H557.78ZM290.57-115.02q-78.12 0-133.09-54.9-54.96-54.89-54.96-133.08 0-48.72 23.88-91.7 23.88-42.97 66.12-70.03V-748q0-40.92 28.54-69.57 28.54-28.65 69.3-28.65 40.77 0 69.44 28.65 28.68 28.65 28.68 69.57v283.27q42.24 27.06 66.12 70.03 23.88 42.98 23.88 91.7 0 78.19-54.89 133.08-54.89 54.9-133.02 54.9ZM170.89-303h239.46q0-40.72-19.6-72.58-19.6-31.85-52.32-45.85l-18.08-7.09V-748q0-12.64-8.69-21.25-8.69-8.6-21.16-8.6-12.64 0-21.13 8.6-8.48 8.61-8.48 21.25v319.48l-17.85 7.09q-33.19 14.23-52.67 46.48-19.48 32.25-19.48 71.95Z"/></svg><input id="in-t" type="range" min="10" max="45" step="1" value="28" aria-label="Sun's heat, air temperature"><output id="o-t" for="in-t">28 °C</output></label>
+      <label class="sl" title="Relative humidity"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M480-74.02q-139.63 0-232.8-95.68-93.18-95.67-93.18-238.3 0-61.61 27.21-123.1 27.2-61.48 69.75-119.56 42.54-58.08 94.12-110.85 51.57-52.77 100.83-96.79 7.96-6.72 16.49-9.58 8.52-2.86 17.65-2.86 9.13 0 17.58 2.86 8.46 2.86 16.42 9.58 49.26 44.02 100.95 96.99 51.69 52.97 94.12 110.89 42.43 57.92 69.75 119.37 27.33 61.44 27.33 123.05 0 142.63-93.3 238.3Q619.63-74.02 480-74.02ZM580.12-250q20.88 0 35.38-14.62 14.5-14.62 14.5-35.5 0-20.88-14.62-35.38-14.62-14.5-35.5-14.5-20.88 0-35.38 14.62-14.5 14.62-14.5 35.5 0 20.88 14.62 35.38 14.62 14.5 35.5 14.5ZM357-277q9 9 21 9t21-9l204-204q9-9 9-21t-9.05-21q-9.06-9-21.5-9-12.45 0-21.45 9L357-319q-9 8.8-9 20.9 0 12.1 9 21.1Zm23.12-173q20.88 0 35.38-14.62 14.5-14.62 14.5-35.5 0-20.88-14.62-35.38-14.62-14.5-35.5-14.5-20.88 0-35.38 14.62-14.5 14.62-14.5 35.5 0 20.88 14.62 35.38 14.62 14.5 35.5 14.5Z"/></svg><input id="in-rh" type="range" min="20" max="95" step="1" value="60" aria-label="Relative humidity"><output id="o-rh" for="in-rh">60 %</output></label>
+      <label class="sl" title="Wind speed"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M456.93-142.06q-38.71 0-70.43-21.77-31.72-21.76-42.91-58.76-5.63-14.67 4.94-27.54Q359.11-263 376.46-263q10.87 0 19.29 7.26t13.66 17.78q6.24 13.53 19.73 20.53 13.5 7 27.79 7 22.24 0 37.4-15.18 15.17-15.18 15.17-37.42 0-22.49-15.17-37.51-15.16-15.02-37.4-15.02h-345.5q-14.42 0-24.24-9.88-9.82-9.87-9.82-24.6 0-14.5 9.82-24.2 9.82-9.69 24.24-9.69h345.5q50.14 0 85.42 35.28T577.63-263q0 50.37-35.28 85.65-35.28 35.29-85.42 35.29Zm-345.5-430.01q-14.42 0-24.24-9.87-9.82-9.87-9.82-24.61 0-14.49 9.82-24.19 9.82-9.7 24.24-9.7h507.5q30.95 0 52.76-21.75 21.81-21.76 21.81-53.05 0-31.04-21.81-52.8-21.81-21.76-52.76-21.76-22.04 0-40.44 11.52t-25.16 31.56q-4.96 11.48-14.42 19.6-9.45 8.12-21.41 8.12-16.65 0-26.22-12.37-9.56-12.37-4.17-27.76 12.67-44.76 48.89-71.78 36.22-27.03 82.93-27.03 59.64 0 101.17 41.54 41.53 41.53 41.53 101.4 0 59.87-41.53 101.4-41.53 41.53-101.17 41.53h-507.5Zm671.2 331.77q-14.91 4.15-26.8-5.31-11.9-9.46-11.9-25.85 0-12.19 8.24-21.65 8.24-9.46 19.72-14.65 20.81-6.76 31.71-25.16 10.9-18.41 10.9-40.45 0-29.52-20.52-50.04t-50.05-20.52h-632.5q-14.42 0-24.24-9.88-9.82-9.87-9.82-24.37 0-14.49 9.82-24.19 9.82-9.7 24.24-9.7h632.5q57.56 0 98.13 40.57 40.57 40.58 40.57 98.13 0 47.72-27.26 84.91-27.26 37.2-72.74 48.16Z"/></svg><input id="in-w" type="range" min="0" max="12" step="1" value="4" aria-label="Wind speed"><output id="o-w" for="in-w">4 m/s</output></label>
+      <span class="vsep" aria-hidden="true"></span>
+      <div class="ibs">
+        <button class="ib" id="btn-lbl" aria-pressed="true" aria-label="Labels" title="Labels"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M142.15-154.02q-28.33 0-48.23-19.9t-19.9-48.23v-515.7q0-28.33 19.9-48.35 19.9-20.02 48.23-20.02h466.7q16.4 0 30.82 7.33 14.43 7.34 24.11 20.26l192.85 257.85q13.44 17.83 13.44 40.62t-13.44 40.94L664.78-181.37q-9.68 12.92-24.11 20.14-14.42 7.21-30.82 7.21h-467.7Z"/></svg></button>
+        <button class="ib" id="btn-rays" aria-pressed="true" aria-label="Sun's rays" title="Sun's rays"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M445.93-841.43v-50q0-14.43 9.88-24.25 9.87-9.82 24.37-9.82 14.49 0 24.19 9.82 9.7 9.82 9.7 24.25v50q0 14.42-9.88 24.24-9.87 9.82-24.37 9.82-14.49 0-24.19-9.82-9.7-9.82-9.7-24.24Zm0 772.86v-50q0-14.42 9.88-24.24 9.87-9.82 24.37-9.82 14.49 0 24.19 9.82 9.7 9.82 9.7 24.24v50q0 14.43-9.88 24.25-9.87 9.82-24.37 9.82-14.49 0-24.19-9.82-9.7-9.82-9.7-24.25Zm445.5-377.36h-50q-14.42 0-24.24-9.88-9.82-9.87-9.82-24.37 0-14.49 9.82-24.19 9.82-9.7 24.24-9.7h50q14.43 0 24.25 9.88 9.82 9.87 9.82 24.37 0 14.49-9.82 24.19-9.82 9.7-24.25 9.7Zm-772.86 0h-50q-14.43 0-24.25-9.88-9.82-9.87-9.82-24.37 0-14.49 9.82-24.19 9.82-9.7 24.25-9.7h50q14.42 0 24.24 9.88 9.82 9.87 9.82 24.37 0 14.49-9.82 24.19-9.82 9.7-24.24 9.7Zm672.5-297.16-24.24 24q-10.44 10.2-24.11 9.7-13.68-.5-23.87-10.7-10.2-10.19-10.08-24.37.12-14.17 10.32-24.37l23-23q10.19-10.19 24.47-10.19t24.37 10.19q10.09 10.2 10.21 24.37.12 14.18-10.07 24.37ZM241.91-192.17l-24 24q-10.19 10.19-23.87 9.69-13.67-.5-23.87-10.69-10.19-10.2-10.31-24.37-.12-14.18 10.31-24.37l23-23q9.94-10.2 24.36-10.2 14.43 0 24.62 10.2 10.2 10.19 10.08 24.37-.12 14.17-10.32 24.37Zm500.18 23-24-23q-10.2-10.44-9.7-24.61.5-14.18 10.7-24.37 10.19-10.2 24.37-10.08 14.17.12 24.37 10.32l23 24q10.19 10.19 10.19 24.06t-10.19 23.68q-10.2 10.19-24.37 10.31-14.18.12-24.37-10.31ZM193.17-720.09l-24-23q-10.19-10.19-9.69-24.37.5-14.17 10.69-24.37 10.2-10.19 24.37-10.31 14.18-.12 24.37 10.07l23 24.24q10.2 10.44 10.2 24.21 0 13.78-10.2 23.77-10.19 10.2-24.37 10.08-14.17-.12-24.37-10.32ZM479.82-255Q386-255 320.5-320.68 255-386.35 255-480.18q0-93.82 65.68-159.32 65.67-65.5 159.5-65.5 93.82 0 159.32 65.68 65.5 65.67 65.5 159.5 0 93.82-65.68 159.32-65.67 65.5-159.5 65.5Z"/></svg></button>
+        <button class="ib" id="btn-arr" aria-pressed="false" aria-label="Cycle arrows" title="Cycle arrows"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M224.07-478.48q0 19.76 2.5 38.16 2.5 18.41 7.02 35.17 3.48 13.67-1.26 27.35-4.74 13.67-17.18 19.87-12.43 6.19-25.61.95-13.17-5.24-17.65-17.67-8.48-25.72-12.22-51.18-3.74-25.45-3.74-52.65 0-131.95 95.34-227.77 95.34-95.82 227.06-95.82h43l-57.42-57.41q-8.48-8.48-8.48-19.95 0-11.48 8.72-19.96 8.48-8.48 20.46-8.48t20.46 8.48l108.28 107.28q10.19 10.2 10.19 24.11t-10.19 24.11L506.07-636.61q-8.48 8.48-20.96 8.48t-20.96-8.48q-8.72-8.48-8.6-21.07.12-12.6 8.6-21.08l55.18-55.17H478.8q-104.6 0-179.67 75.3-75.06 75.3-75.06 180.15Zm511.86-.28q0-19.52-2.38-38.04-2.38-18.53-7.14-36.05-4.24-13.67.38-27.35 4.62-13.67 17.06-19.87 12.19-6.19 24.87-1.07 12.67 5.12 17.39 17.31 9.48 25.96 13.72 52.04 4.24 26.07 4.24 53.03 0 132.19-95.34 228.13-95.34 95.93-226.82 95.93h-45.24l57.18 57.18q8.72 8.48 8.6 19.95-.12 11.48-8.6 19.96-8.72 8.48-20.58 8.48-11.86 0-20.34-8.48L344.65-164.89q-10.19-10.2-10.19-23.99t10.19-23.99l108.52-108.28q8.24-8.48 20.22-8.6 11.98-.12 20.7 8.36 8.48 8.72 8.48 20.57 0 11.86-8.48 20.34l-57.42 57.41h44.53q104.6 0 179.67-75.3 75.06-75.3 75.06-180.39Z"/></svg></button>
+        <button class="ib" id="btn-reset" aria-label="Clear sky and restart" title="Clear sky &amp; restart"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M412.74-121.22q-111.48-22.43-185.1-111.39-73.62-88.96-73.62-206.15 0-69.81 29.16-132.21 29.17-62.4 82.73-106.16 8.72-8.39 22.23-8.01 13.51.38 23.19 10.05 10.47 10.48 9.71 24.56-.76 14.07-13 25.03-40.56 34.28-63.22 83.47-22.67 49.18-22.67 103.27 0 92.33 56.57 160.87 56.56 68.54 143.65 88.54 12.2 2.96 20.41 12.92 8.22 9.95 8.22 22.15 0 16.63-11.67 26.32-11.68 9.7-26.59 6.74Zm136.76 0q-15.15 3.2-26.83-6.62-11.67-9.81-11.67-26.2 0-11.96 8.22-22.16 8.21-10.19 20.41-13.15 88.09-20 143.65-88.54 55.57-68.54 55.57-160.87 0-106.85-73.59-181.51t-180.43-76.1h-20.72l39.24 39.24q8.24 8.48 8.24 21.96 0 13.47-8.24 21.95-9.48 9.48-23.08 9.48-13.6 0-22.07-9.48l-95.55-94.54q-5.48-5.48-7.83-11.32-2.36-5.83-2.36-12.55 0-6.96 2.36-12.67 2.35-5.72 7.83-11.2l95.55-96.02q8.47-8.24 22.07-8.24t23.08 8.24q8.24 9.48 8.24 23.07 0 13.6-8.24 22.08l-41.87 41.63h20.95q135.92 0 230.35 95.41 94.44 95.42 94.44 230.57 0 117.19-73.24 206.15-73.24 88.96-184.48 111.39Z"/></svg></button>
+        <button class="btn teachbtn" id="btn-teach"><svg viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M859.76-313.24v-248.65L512.07-374.28q-15.92 8.95-33.07 8.45t-32.83-9.45L89.67-570.41q-8.95-5.48-13.17-13.08-4.22-7.6-4.22-16.54 0-8.93 4.22-16.5 4.22-7.58 13.17-13.06l356.5-194.89q7.59-4.48 15.92-6.84 8.32-2.35 16.91-2.35t16.91 2.35q8.33 2.36 16.16 6.84L907.11-610.2q8.34 4.34 13.24 12.62 4.91 8.29 4.91 17.97V-313q0 13.95-9.51 23.29t-23.29 9.34q-14.03 0-23.36-9.46-9.34-9.46-9.34-23.41ZM446.17-135.52 221.91-258.17q-16.15-9.2-25.73-25.36-9.57-16.17-9.57-34.82v-166.58l259.56 142.28q15.33 8.95 32.66 8.95 17.32 0 33.24-8.95l259.56-142.28v166.58q0 18.65-9.7 34.82-9.69 16.16-25.6 25.36L512.07-135.52q-7.83 4.48-16.16 6.72-8.32 2.23-16.91 2.23t-16.91-2.23q-8.33-2.24-15.92-6.72Z"/></svg><span data-i="teach">Teach mode</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"./lib/three/three.module.js","three/addons/":"./lib/three/addons/"}}</script>
+<script type="module" src="script.js"></script>
+</body>
+</html>
