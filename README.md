@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner/banner.png" alt="Zeus Cyclonix" width="100%">
+  <img src="assets/banner.png" alt="Zeus Cyclonix" width="100%">
 </p>
 
 <h1 align="center">🌀 Zeus Cyclonix</h1>
@@ -45,31 +45,33 @@ Repository: GitHub & Codeberg
 
 ---
 
-🧩 **3D Asset Credits**
+🙏 **Credits**
 
-Original creators retain ownership of their respective models. Models were compressed, resized and re-coloured for this simulator.
+| Role | Credit |
+|:--|:--|
+| 🧑‍💻 Project Designer | **Sai Prasad**, Msc. Ag. Entomology, NET |
+| 🤖 Development | Claude Opus 5.5 (AI-assisted development) |
 
-- 🏞️ "Water Cycle (Animated)" by RODX81, shared by Clement Abai · CC BY 4.0 · [Sketchfab](https://sketchfab.com/3d-models/water-cycle-animated-203e16058fa94e618829447db71ddba4)
-- ☀️ "Sun with 2K Textures" by ayushcodemate · [Sketchfab](https://sketchfab.com/3d-models/sun-with-2k-textures-bac9e8f95040484bb86f1deb9bd6fe95)
-- ☁️ "Fluffy Cloud" by Loïc Norgeot · CC BY 4.0 · [Sketchfab](https://sketchfab.com/3d-models/fluffy-cloud-2c887a28840f47cfae6b5dee0d11b842)
-- ❄️ "Looping Snow 2" by Elin · CC BY 4.0 · [Sketchfab](https://sketchfab.com/3d-models/looping-snow-2-939d059c7a43424f93c3e8e44e1d5489)
-- 💧 "drop of water" by furret · CC BY 4.0 · [Sketchfab](https://sketchfab.com/3d-models/drop-of-water-dcbdc5e8905449ad95a47720e4d3c57c)
-- 🌊 "Water Animation" by Artise1 · CC BY 4.0 · [Sketchfab](https://sketchfab.com/3d-models/water-animation-e54ff76bef854b128af8d20cf9c03729)
+**3D Models** · from Sketchfab
 
-Also used: Three.js (MIT) · IBM Plex fonts (SIL Open Font License) · Material Symbols icons by Google (Apache 2.0)
+| | Asset | Model | Creator | Licence |
+|:-:|:--|:--|:--|:--|
+| 🏞️ | Landscape | [Water Cycle (Animated)](https://sketchfab.com/3d-models/water-cycle-animated-203e16058fa94e618829447db71ddba4) | RODX81, shared by Clement Abai | CC BY 4.0 |
+| ☀️ | Sun | [Sun with 2K Textures](https://sketchfab.com/3d-models/sun-with-2k-textures-bac9e8f95040484bb86f1deb9bd6fe95) | ayushcodemate | See source |
+| ☁️ | Clouds | [Fluffy Cloud](https://sketchfab.com/3d-models/fluffy-cloud-2c887a28840f47cfae6b5dee0d11b842) | Loïc Norgeot | CC BY 4.0 |
+| ❄️ | Snow | [Looping Snow 2](https://sketchfab.com/3d-models/looping-snow-2-939d059c7a43424f93c3e8e44e1d5489) | Elin | CC BY 4.0 |
+| 💧 | Raindrops | [drop of water](https://sketchfab.com/3d-models/drop-of-water-dcbdc5e8905449ad95a47720e4d3c57c) | furret | CC BY 4.0 |
+| 🌊 | Sea and river | [Water Animation](https://sketchfab.com/3d-models/water-animation-e54ff76bef854b128af8d20cf9c03729) | Artise1 | CC BY 4.0 |
 
----
+**Libraries and Assets**
 
-👤 **Project Designer**
+| Component | Licence |
+|:--|:--|
+| Three.js | MIT |
+| IBM Plex fonts | SIL Open Font License |
+| Material Symbols icons (Google) | Apache 2.0 |
 
-**Sai Prasad**
-Msc. Ag. Entomology, NET
-
----
-
-🤖 **Development Credits**
-
-- Claude Opus 5.5: AI-assisted development
+<sub>Original creators retain ownership of their models. Models were compressed, resized and re-coloured for this simulator.</sub>
 
 ---
 
