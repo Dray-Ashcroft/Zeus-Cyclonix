@@ -8,8 +8,10 @@
 
 An interactive 3D simulation of the water cycle: evaporation, condensation, precipitation, runoff and groundwater, driven by real atmospheric physics and built for classroom smart panels.
 
+---
+
 <p align="center">
-  <a href="https://zeus-cyclonix.pages.dev"><strong>Enter the Cycle →</strong></a>
+  <a href="https://zeus-cyclonix.stark-kodex.workers.dev/"><strong>Enter the Cycle 🌀</strong></a>
 </p>
 
 ---
