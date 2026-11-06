@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/assets/banner.png" alt="Zeus Cyclonix" width="100%">
+  <img src="assets/banner/banner.png" alt="Zeus Cyclonix" width="100%">
 </p>
 
 <h1 align="center">🌀 Zeus Cyclonix</h1>
