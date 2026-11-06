@@ -32,7 +32,13 @@ en:{
   mag_title:'Inside a cloud', mag_note:'Not to scale', look:'Look inside a cloud',
   mag_a:'Water vapour molecules move freely in the warm air.', mag_b:'The air cools to its dew point. Molecules collect on a salt crystal and form a droplet.',
   mag_c:'Countless droplets make the cloud. They bump into each other and join.', mag_d:'The drop grows too heavy to float and falls as a raindrop.',
-  ml_mol:'Water molecule', ml_salt:'Salt crystal (nucleus)', ml_drop:'Cloud droplet ≈ 0.01 mm', ml_rain:'Raindrop ≈ 1 mm'
+  ml_mol:'Water molecule', ml_salt:'Salt crystal (nucleus)', ml_drop:'Cloud droplet ≈ 0.01 mm', ml_rain:'Raindrop ≈ 1 mm',
+  ml_liq:'Liquid water · hydrogen bonds',
+  mag_title_ice:'Inside a freezing cloud',
+  ice_b:'Below 0 °C, molecules settle on a dust grain and lock straight into ice: a lattice of hexagonal rings.',
+  ice_c:'The ice crystal grows as nearby droplets evaporate onto it, branching into six arms.',
+  ice_d:'The snowflake grows too heavy to float and falls as snow.',
+  ml_dust:'Dust grain (ice nucleus)', ml_ice:'Ice · hexagonal rings', ml_crys:'Ice crystal', ml_flake:'Snowflake ≈ 2 mm'
 }};
 
 /* Teach mode steps */
@@ -485,15 +491,42 @@ function patchRock(mat){
       .replace('#include <project_vertex>','#include <project_vertex>\nvWY=(modelMatrix*vec4(transformed,1.0)).y;');
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vWY;')
       .replace('#include <map_fragment>',`#include <map_fragment>
-        float rRed=smoothstep(0.03,0.12,diffuseColor.r-max(diffuseColor.g,diffuseColor.b)*1.25)*step(vWY,2.3);
+        float rRed=max(smoothstep(0.03,0.12,diffuseColor.r-max(diffuseColor.g,diffuseColor.b)*1.25),
+          smoothstep(1.35,1.8,diffuseColor.r/max(max(diffuseColor.g,diffuseColor.b),0.01))*smoothstep(0.015,0.04,diffuseColor.r))*step(vWY,2.3);   // even dim red, judged by hue
         float rockK=max(smoothstep(1.5,1.0,vWY),rRed);
         float rLum=dot(diffuseColor.rgb,vec3(0.299,0.587,0.114));
         diffuseColor.rgb=mix(diffuseColor.rgb, vec3(0.040,0.036,0.033)+rLum*vec3(0.10,0.092,0.085), rockK);`)
-      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance*=(1.0-smoothstep(1.6,1.05,vWY))*(1.0-rockK);');
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nfloat eRed=smoothstep(0.015,0.08,totalEmissiveRadiance.r-max(totalEmissiveRadiance.g,totalEmissiveRadiance.b)*1.2);\ntotalEmissiveRadiance*=(1.0-smoothstep(1.6,1.05,vWY))*(1.0-rockK)*(1.0-eRed);   // no magma glow on any face');
   };
   mat.needsUpdate=true;
 }
 
+/* Groundwater: soft light drifting through the model's own channel, on every cut-away face */
+const GWU={uPh:{value:0},uAmt:{value:0.7}};
+function patchGroundwater(mesh){
+  const mat=mesh.material.clone(); mesh.material=mat;
+  mat.onBeforeCompile=sh=>{
+    sh.uniforms.uPh=GWU.uPh; sh.uniforms.uAmt=GWU.uAmt;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vGW;')
+      .replace('#include <project_vertex>','#include <project_vertex>\nvGW=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>',`#include <common>
+      varying vec3 vGW; uniform float uPh,uAmt;
+      float gh3(vec3 p){ p=fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+      float gn3(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
+        return mix(mix(mix(gh3(i),gh3(i+vec3(1,0,0)),f.x),mix(gh3(i+vec3(0,1,0)),gh3(i+vec3(1,1,0)),f.x),f.y),
+                   mix(mix(gh3(i+vec3(0,0,1)),gh3(i+vec3(1,0,1)),f.x),mix(gh3(i+vec3(0,1,1)),gh3(i+vec3(1,1,1)),f.x),f.y),f.z); }`)
+      .replace('#include <map_fragment>',`#include <map_fragment>
+        // two noise layers drifting downhill towards the sea at different speeds: soft, rippling light, never stripes
+        vec3 gd=normalize(vec3(0.0,-0.6,1.0));
+        vec3 q=vGW*2.2-gd*uPh;
+        float gnA=gn3(q), gnB=gn3(q*2.3+vec3(7.1)-gd*uPh*0.7);
+        float gn=gnA*0.6+gnB*0.4;
+        float ghl=smoothstep(0.52,0.85,gn);
+        diffuseColor.rgb*=0.9+0.2*gn;
+        diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*0.85+vec3(0.35,0.55,0.62),ghl*uAmt);`);
+  };
+  mat.needsUpdate=true;
+}
 function onModel(gltf){
   root=gltf.scene; root.scale.setScalar(100); scene.add(root);
   let skinned=[];
@@ -518,6 +551,9 @@ function onModel(gltf){
     patchCloudMaterial(cloudMesh.material);
   }
   for(const m of skinned) if(/^mesh_[01]$/.test(m.name)) patchRock(m.material);
+  // sharper ground when the camera looks across the land at a low angle
+  root.traverse(o=>{ if(o.isMesh&&o.material&&o.material.map){ o.material.map.anisotropy=MAX_ANISO; o.material.map.needsUpdate=true; } });
+  root.traverse(o=>{ if(o.isMesh&&/^side_water/.test(o.name)) patchGroundwater(o); });
   // animation: everything except the clouds' scale, which the simulation drives
   const src=gltf.animations.find(a=>a.name==='idle_with_info')||gltf.animations[0];
   const clip=new THREE.AnimationClip('wc',src.duration,src.tracks.filter(tr=>!(/^Cloud/.test(tr.name)&&/\.scale$/.test(tr.name))));
@@ -596,7 +632,7 @@ async function loadModel(){
   try{ onModel(g); }catch(e){ failLoad(e); return; }
   // the detailed models load next, behind the loading screen, so the scene appears complete
   $('load-msg').textContent='Adding the Sun, clouds, rain, snow and water…';
-  const extras=[['wc-sun','models/sun.glb',onSun],['wc-cloud','models/cloud.glb',onCloud],['wc-drop','models/drop.glb',onDrop],['wc-waves','models/waves.glb',onWaves],['wc-snow','models/snow.glb',onSnow]];
+  const extras=[['wc-sun','models/sun.glb',onSun],['wc-cloud','models/cloud.glb',onCloud],['wc-drop','models/drop.glb',onDrop],['wc-waves','models/waves.glb',onWaves],['wc-snow','models/snow.glb',onSnow],['wc-h2o','models/h2o.glb',onH2O],['wc-lw','models/lw.glb',onLW],['wc-plants','models/plants.glb',onPlants],['wc-maize','models/maize.glb',onMaize],['wc-trees','models/trees.glb',onTrees],['wc-clover','models/clover.glb',onClover]];
   let done=0; $('load-bar').style.width='0%';
   for(const [id,file,fn] of extras){
     try{ fn(await parseGLB(await getGLB(id,file,false))); } catch(e){ console.warn('Could not load '+file,e); }
@@ -739,13 +775,7 @@ function flowStrip(srcMap,pts,w0,w1,mode,repeatLen,tint){
 function buildRiver(srcMap){
   const F={};
   F.river=flowStrip(srcMap,RIVER.map(p=>[p[0],p[1]-0.02,p[2]]),0.3,0.75,'flat',1.1,0xcdeeff);
-  // groundwater: the main channel to the sea and the two seepage channels, on the cut-away face
-  const X=5.52, main=[]; for(let z=-8.5;z<=6.001;z+=0.5) main.push([X,CH_Y[String(Math.round(z*2)/2)]+0.07,z]); main.push([X,1.0,6.6]);
-  F.gwMain=flowStrip(srcMap,main,0.17,0.17,'face',0.55,0xe2f6ff);
-  F.gwA=flowStrip(srcMap,[[X,2.88,0.5],[X,2.1,0.5],[X,1.42,0.5]],0.14,0.14,'face',0.45,0xe2f6ff);
-  F.gwB=flowStrip(srcMap,[[X,3.7,-5.0],[X,2.9,-5.0],[X,2.12,-5.0]],0.14,0.14,'face',0.45,0xe2f6ff);
-  for(const k of ['gwMain','gwA','gwB']){ F[k].mat.emissiveIntensity=0.6; F[k].mat.userData.band.value=1; }
-  F.river.mat.userData.band.value=0.35;
+  F.river.mat.userData.band.value=0;   // no bright bands: the ripple texture alone shows the flow
   NEW.flow=F; NEW.river=F.river;
   FL.list.length=0;   // the dots from before the water model arrived are no longer needed
 }
@@ -758,11 +788,11 @@ function updateFlow(dt,raw){
   const r=clamp(S.flowR/12,0,1), g=clamp(S.flowG/6,0,1);   // rain on the hills also reaches the lake and river
   F.river.tex.offset.y-=dt*(0.2+0.6*r);  F.river.mat.opacity=0.7+0.3*r;
   // groundwater always seeps slowly; recent rain makes it move faster
-  F.gwMain.tex.offset.y-=dt*(0.45+0.6*g); F.gwMain.mat.opacity=0.75+0.25*g;
-  for(const b of [F.gwA,F.gwB]){ b.tex.offset.y-=dt*(0.55+0.7*g); b.mat.opacity=0.7+0.3*g; }
+  GWU.uPh.value+=dt*(0.35+0.8*g); GWU.uAmt.value=0.6+0.4*g;
 }
 const _ax=new THREE.Vector3(-1,0,0), _q=new THREE.Quaternion(), _m4=new THREE.Matrix4(), _s3=new THREE.Vector3(), _p3=new THREE.Vector3(), _vd=new THREE.Vector3();
 function updateNewModels(dt,raw){
+  updatePlants(dt);
   const k=clamp((S.T-10)/35,0,1);
   if(NEW.sun){ NEW.sun.position.copy(RAYS.sun); NEW.sun.scale.setScalar(1.1*(0.85+0.25*k)); NEW.sun.rotation.y+=dt*0.08; }
   if(NEW.clouds){
@@ -1018,19 +1048,340 @@ function exitTeach(){
   S.focus='all'; showInfo('all'); goTo('all');
 }
 
+/* ---------- Plants, placed by vegetation zone ----------
+   The landscape's own photo texture decides where plants grow: green ground gets plants, while sand, bare rock,
+   snow and water stay bare. Maize fields and meadows cover the plains, reeds and ferns line the lake and river,
+   and pines climb the lower slopes, thinning and shrinking towards the tree line. Everything sways with the wind slider. */
+const MAX_ANISO=renderer?Math.min(8,renderer.capabilities.getMaxAnisotropy()):1;
+const VEG={u:{uTime:{value:0},uWind:{value:4}},sp:{},ims:[],map:null,built:false};
+function bakeParts(g){ g.scene.updateMatrixWorld(true); const out=[];
+  g.scene.traverse(o=>{ if(!o.isMesh) return; let p=o, grp=''; while(p){ if(/^(Bark|Grass)/.test(p.name)){ grp=p.name; } p=p.parent; }
+    out.push({name:o.name,grp,geo:floatGeom(o.geometry,o.matrixWorld),mat:o.material}); }); return out; }
+// a model laid out as a row of plants → one variant per plant (cut where the row has a gap); stems and leaves of a plant stay together
+function splitRow(parts,gapFrac){
+  // the row may run sideways or front-to-back: cut along whichever way it is longer
+  const bb=new THREE.Box3(); for(const p of parts){ p.geo.computeBoundingBox(); bb.union(p.geo.boundingBox); }
+  const sz=bb.getSize(new THREE.Vector3()), along=sz.z>sz.x?'getZ':'getX';
+  const items=[]; let mn=1e9,mx=-1e9;
+  parts.forEach((p,pi)=>{ const pos=p.geo.attributes.position, idx=p.geo.index, nT=idx.count/3;
+    for(let t=0;t<nT;t++){ let x=0; for(let k=0;k<3;k++) x+=pos[along](idx.getX(t*3+k)); x/=3; items.push([x,pi,t]); mn=Math.min(mn,x); mx=Math.max(mx,x); } });
+  items.sort((a,b)=>a[0]-b[0]);
+  const gap=(mx-mn)*gapFrac, groups=[[]];
+  for(let i=0;i<items.length;i++){ if(i>0&&items[i][0]-items[i-1][0]>gap) groups.push([]); groups[groups.length-1].push(items[i]); }
+  return groups.filter(g=>g.length>=4).map(g=>normVariant(parts.map((p,pi)=>sub(p,g.filter(it=>it[1]===pi).map(it=>it[2]))).filter(Boolean)));
+}
+function sub(p,tris){ if(!tris.length) return null;
+  const src=p.geo, idx=src.index, map=new Map(), ind=[];
+  for(const t of tris) for(let k=0;k<3;k++){ const i=idx.getX(t*3+k); if(!map.has(i)) map.set(i,map.size); ind.push(map.get(i)); }
+  const g=new THREE.BufferGeometry(), ids=[...map.keys()];
+  for(const [k,a] of Object.entries(src.attributes)){ const n=a.itemSize, f=new Float32Array(ids.length*n); ids.forEach((i,j)=>{ for(let c=0;c<n;c++) f[j*n+c]=acomp(a,i,c); }); g.setAttribute(k,new THREE.BufferAttribute(f,n)); }
+  g.setIndex(ind); return {geo:g,mat:p.mat};
+}
+// base centre at the origin, largest size = 1, so a plant's size is set by one number when it is planted
+function normVariant(parts){
+  const b=new THREE.Box3(); for(const p of parts){ p.geo.computeBoundingBox(); b.union(p.geo.boundingBox); }
+  const s=b.getSize(new THREE.Vector3()), c=b.getCenter(new THREE.Vector3()), k=1/Math.max(s.x,s.y,s.z);
+  for(const p of parts){ p.geo.translate(-c.x,-b.min.y,-c.z); p.geo.scale(k,k,k); p.geo.computeBoundingSphere(); }
+  return {parts,h:s.y*k};
+}
+function vegMat(m,stiff,tint){
+  const mm=m.clone(); if(tint) mm.color.multiplyScalar(tint);
+  if(mm.map){ mm.map.anisotropy=MAX_ANISO; mm.map.needsUpdate=true; }   // stays sharp when seen at a low angle mm.side=THREE.DoubleSide; mm.metalness=0; mm.roughness=0.92; mm.envMapIntensity=0.6;
+  // thin needles and grass blades: a low cut-off plus alpha-to-coverage, so foliage does not vanish when its texture is seen small and far away
+  if(m.alphaTest>0||m.transparent){ mm.transparent=false; mm.alphaTest=0.12; mm.alphaToCoverage=true; mm.depthWrite=true; }
+  // leaves let light through: a little of their own colour glows on the shaded side, so foliage never turns black
+  if(mm.map){ mm.emissive=new THREE.Color(0xffffff); mm.emissiveMap=mm.map; mm.emissiveIntensity=0.28; }
+  mm.onBeforeCompile=sh=>{
+    sh.uniforms.uTime=VEG.u.uTime; sh.uniforms.uWind=VEG.u.uWind;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nuniform float uTime,uWind;')
+      .replace('#include <project_vertex>',`
+        vec4 wp=vec4(transformed,1.0); vec2 ph=vec2(0.0); float isz=1.0;
+        #ifdef USE_INSTANCING
+          wp=instanceMatrix*wp; ph=instanceMatrix[3].xz; isz=length(instanceMatrix[1].xyz);
+        #endif
+        // the wind blows inland (towards the mountains); tips bend most, the base stays put, and gusts travel across the land
+        float hgt=clamp(transformed.y,0.0,1.0);
+        float gust=0.65+0.35*sin(uTime*(1.2+0.1*uWind)-ph.y*1.6+ph.x*0.7)+0.15*sin(uTime*3.1+ph.x*7.3+ph.y*5.1);
+        float bend=(0.01+0.011*uWind)*${stiff.toFixed(3)}*hgt*hgt*gust*isz;
+        wp.z-=bend; wp.x+=bend*0.3*sin(uTime*1.7+ph.y*3.0); wp.y-=bend*bend*0.5/max(isz,1e-3);
+        vec4 mvPosition=modelViewMatrix*wp; gl_Position=projectionMatrix*mvPosition;`);
+  };
+  mm.customProgramCacheKey=()=>'veg'+stiff+(mm.alphaTest>0?'a':'o');
+  return mm;
+}
+function onPlants(g){   // from the plant set: ferns and white wildflowers
+  const parts=bakeParts(g), by=n=>parts.filter(p=>p.name===n);
+  const row=(names,gap)=>splitRow(names.flatMap(by),gap);
+  VEG.sp.fern={v:row(['Object_7'],0.04),stiff:0.6};
+  VEG.sp.daisy={v:row(['Object_9'],0.035),stiff:1};
+  plantAll();
+}
+function onTrees(g){   // broadleaf trees with full crowns (a round-crowned and a slender form) and chunky grass tufts
+  const parts=bakeParts(g), grp=n=>parts.filter(p=>p.grp===n).map(p=>({geo:p.geo,mat:p.mat}));
+  VEG.sp.tree={v:['Bark001_2669','Bark_2671'].map(n=>normVariant(grp(n))).filter(v=>v.parts.length),stiff:0.3,tintAll:1.1};
+  VEG.sp.tuft={v:['Grass_B_Low_Dense_2','Grass_B_Low_Dense024_3','Grass_B_Low_Small_1','Grass_B_Low_Small092_4'].map(n=>normVariant(grp(n))).filter(v=>v.parts.length),stiff:1};
+  plantAll();
+}
+function onClover(g){   // clover patches: soft, round-leaved ground cover
+  // the patches are dense, so only the lighter ones are planted (under 9,000 triangles each)
+  const parts=bakeParts(g), v=parts.flatMap(p=>splitRow([p],0.006)).filter(v=>v.parts.reduce((a,q)=>a+q.geo.index.count/3,0)<9000);
+  VEG.sp.clover={v,stiff:0.2,tintAll:1.1};
+  plantAll();
+}
+function onMaize(g){ const parts=bakeParts(g); VEG.sp.maize={v:[normVariant(parts.map(p=>({geo:p.geo,mat:p.mat})))],stiff:0.7,tintAll:1.45}; plantAll(); }   // the leaf photo is dark; maize in sun reads lighter
+
+/* the vegetation map: terrain height, slope and photo colour on a fine grid (0.05 units) */
+function buildVegMap(){
+  let m=null; root.traverse(o=>{ if(o.isMesh&&/^mesh_0$/.test(o.name)) m=o; });
+  if(!m||!m.material.map||!m.material.map.image) return null;
+  const pa=m.geometry.attributes.position, ua=m.geometry.attributes.uv, ia=m.geometry.index, n=pa.count, P=new Float32Array(n*3), v=new THREE.Vector3();
+  if(m.skeleton) m.skeleton.update();
+  for(let i=0;i<n;i++){ m.getVertexPosition(i,v); v.applyMatrix4(m.matrixWorld); P[i*3]=v.x; P[i*3+1]=v.y; P[i*3+2]=v.z; }
+  const cs=0.05, x0=G.x0, z0=G.z0, nx=Math.ceil(G.nx*G.cs/cs), nz=Math.ceil(G.nz*G.cs/cs), N=nx*nz;
+  const H=new Float32Array(N).fill(-1e9), U=new Float32Array(N), W=new Float32Array(N), NY=new Float32Array(N);
+  const nT=ia?ia.count/3:n/3, id=k=>ia?ia.getX(k):k;
+  for(let t=0;t<nT;t++){
+    const a=id(t*3),b=id(t*3+1),c=id(t*3+2);
+    const ax=P[a*3],ay=P[a*3+1],az=P[a*3+2], bx=P[b*3],by=P[b*3+1],bz=P[b*3+2], cx=P[c*3],cy=P[c*3+1],cz=P[c*3+2];
+    const e1x=bx-ax,e1y=by-ay,e1z=bz-az, e2x=cx-ax,e2y=cy-ay,e2z=cz-az;
+    const nX=e1y*e2z-e1z*e2y, nY=e1z*e2x-e1x*e2z, nZ=e1x*e2y-e1y*e2x, nl=Math.hypot(nX,nY,nZ)||1, ny=Math.abs(nY)/nl;
+    if(ny<0.3) continue;                                  // cliffs and the cut-away sides
+    const det=e1x*e2z-e2x*e1z; if(Math.abs(det)<1e-12) continue;
+    const i0=Math.max(0,Math.floor((Math.min(ax,bx,cx)-x0)/cs)), i1=Math.min(nx-1,Math.floor((Math.max(ax,bx,cx)-x0)/cs));
+    const j0=Math.max(0,Math.floor((Math.min(az,bz,cz)-z0)/cs)), j1=Math.min(nz-1,Math.floor((Math.max(az,bz,cz)-z0)/cs));
+    for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){
+      const px=x0+(i+0.5)*cs-ax, pz=z0+(j+0.5)*cs-az, s=(px*e2z-e2x*pz)/det, r=(e1x*pz-px*e1z)/det;
+      if(s<-1e-4||r<-1e-4||s+r>1+1e-4) continue;
+      const y=ay+s*e1y+r*e2y, k=j*nx+i; if(y<=H[k]) continue;
+      H[k]=y; NY[k]=ny; U[k]=ua.getX(a)+s*(ua.getX(b)-ua.getX(a))+r*(ua.getX(c)-ua.getX(a)); W[k]=ua.getY(a)+s*(ua.getY(b)-ua.getY(a))+r*(ua.getY(c)-ua.getY(a));
+    }
+  }
+  const TS=512, cv=document.createElement('canvas'); cv.width=cv.height=TS; const cx2=cv.getContext('2d',{willReadFrequently:true});
+  cx2.drawImage(m.material.map.image,0,0,TS,TS); const px=cx2.getImageData(0,0,TS,TS).data;
+  const C=new Uint8Array(N*3), WET=new Uint8Array(N);
+  for(let k=0;k<N;k++){ if(H[k]<-1e8) continue;
+    const u=((U[k]%1)+1)%1, w=((W[k]%1)+1)%1, q=(Math.min(TS-1,Math.floor(w*TS))*TS+Math.min(TS-1,Math.floor(u*TS)))*4;
+    C[k*3]=px[q]; C[k*3+1]=px[q+1]; C[k*3+2]=px[q+2];
+    const x=x0+((k%nx)+0.5)*cs, z=z0+(Math.floor(k/nx)+0.5)*cs;
+    if(isWater(x,z)||(px[q+2]>px[q+1]+6&&px[q+2]>px[q]+20)) WET[k]=1; }
+  // distance to open water (lake, river, sea) by a breadth-first sweep, in grid cells
+  const D=new Uint16Array(N).fill(65535), Q=new Int32Array(N); let qh=0,qt=0;
+  for(let k=0;k<N;k++) if(WET[k]){ D[k]=0; Q[qt++]=k; }
+  while(qh<qt){ const k=Q[qh++], i=k%nx, j=(k/nx)|0, d=D[k]+1;
+    if(i>0&&D[k-1]>d){D[k-1]=d;Q[qt++]=k-1;} if(i<nx-1&&D[k+1]>d){D[k+1]=d;Q[qt++]=k+1;}
+    if(j>0&&D[k-nx]>d){D[k-nx]=d;Q[qt++]=k-nx;} if(j<nz-1&&D[k+nx]>d){D[k+nx]=d;Q[qt++]=k+nx;} }
+  return {cs,x0,z0,nx,nz,H,NY,C,WET,D};
+}
+function vegAt(x,z){
+  const M=VEG.map, i=Math.floor((x-M.x0)/M.cs), j=Math.floor((z-M.z0)/M.cs);
+  if(i<0||j<0||i>=M.nx||j>=M.nz) return null; const k=j*M.nx+i; if(M.H[k]<-1e8) return null;
+  const r=M.C[k*3],g=M.C[k*3+1],b=M.C[k*3+2], L=(r+g+b)/3, mxc=Math.max(r,g,b), sat=mxc?(mxc-Math.min(r,g,b))/mxc:0;
+  return {y:M.H[k],ny:M.NY[k],r,g,b,L,sat,wet:M.WET[k]===1,dw:M.D[k]*M.cs,
+    green:(g-Math.max(r*0.92,b))/255,            // > 0 where the photo shows vegetation
+    bare:L>165&&sat<0.22||L<38||r>g*1.18};      // snow, bare rock, deep shadow or sand/soil
+}
+// smooth value noise, for patches and clearings
+function vnoise(x,z){ const h=(a,b)=>{ const s=Math.sin(a*127.1+b*311.7)*43758.5453; return s-Math.floor(s); };
+  const i=Math.floor(x),j=Math.floor(z),fx=x-i,fz=z-j,ux=fx*fx*(3-2*fx),uz=fz*fz*(3-2*fz);
+  return lerp(lerp(h(i,j),h(i+1,j),ux),lerp(h(i,j+1),h(i+1,j+1),ux),uz); }
+
+function plantAll(){
+  if(VEG.built||!root||!VEG.sp.tree||!VEG.sp.maize||!VEG.sp.fern||!VEG.sp.clover) return;
+  VEG.map=buildVegMap(); if(!VEG.map) return; VEG.built=true;
+  let seed=20261106; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  const X0=-5.6, X1=5.95, Z0=-10.9, Z1=6.0;            // the land, inside the cut-away edges
+  const taken=new Map(), cellK=(x,z)=>Math.floor(x/0.1)+'_'+Math.floor(z/0.1);
+  const free=(x,z,r)=>{ for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++){ const L=taken.get((Math.floor(x/0.1)+dx)+'_'+(Math.floor(z/0.1)+dz)); if(L) for(const q of L) if(Math.hypot(q[0]-x,q[1]-z)<Math.max(r,q[2])) return false; } return true; };
+  const take=(x,z,r)=>{ const k=cellK(x,z); (taken.get(k)||taken.set(k,[]).get(k)).push([x,z,r]); };
+  const out={};                                            // species → list of [variant, x, y, z, size, yaw, tilt x, tilt z, shade]
+  const put=(sp,vi,x,y,z,size,tilt,c)=>{ const sh=0.86+rnd()*0.24; (out[sp]||(out[sp]=[])).push([vi,x,y,z,size,rnd()*6.283,tilt?(rnd()-0.5)*0.12:0,tilt?(rnd()-0.5)*0.12:0,sh,c||null]); };
+  const scatter=(n,tries,fn)=>{ let k=0; for(let t=0;t<tries&&k<n;t++){ const x=lerp(X0,X1,rnd()), z=lerp(Z0,Z1,rnd()), s=vegAt(x,z); if(s&&fn(x,z,s)) k++; } return k; };
+
+  // 1. maize fields: flat green farmland on the plains, planted in rows, away from the water's edge
+  const fields=[]; for(let t=0;t<4000&&fields.length<3;t++){
+    const x=lerp(-4.2,4.6,rnd()), z=lerp(-3.6,3.2,rnd()), s=vegAt(x,z);
+    if(!s||s.ny<0.97||s.y<2.7||s.y>3.4||s.dw<0.45||s.bare||s.green<0.0) continue;
+    if(fields.some(f=>Math.hypot(f[0]-x,f[1]-z)<2.2)) continue;
+    let ok=true; for(const [dx,dz] of [[0.4,0.3],[-0.4,0.3],[0.4,-0.3],[-0.4,-0.3]]){ const q=vegAt(x+dx,z+dz); if(!q||q.ny<0.95||q.dw<0.3||Math.abs(q.y-s.y)>0.12) { ok=false; break; } }
+    if(ok) fields.push([x,z,rnd()*Math.PI]); }
+  for(const [fx,fz,fa] of fields){ const ca=Math.cos(fa), sa=Math.sin(fa), Wd=lerp(0.75,1.0,rnd()), Dp=lerp(0.5,0.65,rnd());
+    for(let u=-Wd/2;u<=Wd/2;u+=0.09) for(let w=-Dp/2;w<=Dp/2;w+=0.075){
+      const x=fx+u*ca-w*sa+(rnd()-0.5)*0.012, z=fz+u*sa+w*ca+(rnd()-0.5)*0.012, s=vegAt(x,z);
+      if(!s||s.dw<0.2||s.ny<0.9||rnd()<0.06) continue;   // a few gaps, as in a real field
+      put('maize',0,x,s.y-0.004,z,lerp(0.105,0.13,rnd()),false); take(x,z,0.04); } }
+
+  const vi=sp=>(rnd()*VEG.sp[sp].v.length)|0;
+  // 2. broadleaf trees. Groves line the lake and rivers, where roots reach water; a few stand alone in the meadows;
+  //    on the mountains a forest belt climbs the lower slopes, thinning out and getting smaller towards the tree line
+  const tree=(x,z,s,size)=>{ if(!free(x,z,size*0.28)) return false;
+    const k=0.9+rnd()*0.2; put('tree',vi('tree'),x,s.y-0.01,z,size,false,[k*(0.92+0.1*rnd()),k,k*(0.85+0.1*rnd())]); take(x,z,size*0.28); return true; };
+  scatter(90,50000,(x,z,s)=>{ if(s.wet||s.bare||s.dw<0.1||s.dw>0.75||s.ny<0.7||s.y<2.65||s.y>3.6) return false;
+    if(rnd()>smooth(0.35,0.7,vnoise(x*1.3+3,z*1.3+7))) return false; return tree(x,z,s,lerp(0.34,0.48,rnd())); });
+  scatter(22,30000,(x,z,s)=>{ if(s.wet||s.bare||s.dw<0.5||s.ny<0.9||s.green<0.0||s.y<2.7||s.y>3.5) return false; return tree(x,z,s,lerp(0.4,0.52,rnd())); });
+  scatter(170,50000,(x,z,s)=>{
+    if(s.bare||s.wet||s.ny<0.55||s.y<3.5||s.y>4.95||s.green<-0.03) return false;
+    const up=smooth(4.2,4.95,s.y), p=(1-up)*smooth(0.3,0.68,vnoise(x*0.9,z*0.9));
+    if(rnd()>p) return false; return tree(x,z,s,lerp(0.36,0.5,rnd())*(1-0.5*up)); });
+
+  // 3. clover and ferns where the soil stays moist; ferns also grow in the shade of the forest
+  scatter(45,40000,(x,z,s)=>{ if(s.wet||s.dw<0.04||s.dw>0.7||s.ny<0.85||s.bare||s.y<2.65||s.y>4.3) return false;
+    if(!free(x,z,0.06)) return false; put('clover',vi('clover'),x,s.y-0.002,z,lerp(0.14,0.22,rnd()),true); take(x,z,0.06); return true; });
+  scatter(110,40000,(x,z,s)=>{ if(s.wet||s.dw<0.06||s.dw>0.5||s.ny<0.7||s.bare||s.green<-0.02||s.y<2.65||s.y>4.5) return false;
+    if(!free(x,z,0.04)) return false; put('fern',vi('fern'),x,s.y-0.003,z,lerp(0.08,0.12,rnd()),true); take(x,z,0.04); return true; });
+  scatter(80,30000,(x,z,s)=>{ if(s.bare||s.ny<0.6||s.y<3.5||s.y>4.6||s.green<-0.03||vnoise(x*0.9,z*0.9)<0.45) return false;
+    if(!free(x,z,0.04)) return false; put('fern',vi('fern'),x,s.y-0.003,z,lerp(0.07,0.1,rnd()),true); take(x,z,0.04); return true; });
+
+  // 4. grass tufts in patches with clearings; their colour follows the ground: fresh green where the land is lush, straw where it is dry
+  scatter(900,120000,(x,z,s)=>{ if(s.wet||s.ny<0.7||s.y<2.6||s.y>4.9||s.L>175) return false;
+    const patch=vnoise(x*1.6+11,z*1.6+5); if(rnd()>patch*1.4-0.15) return false;
+    if(s.green<0&&rnd()<0.5) return false;
+    if(!free(x,z,0.03)) return false;
+    const g=clamp((s.green+0.02)/0.08,0,1), c=[lerp(1.12,0.82,g),lerp(1.0,1.05,g),lerp(0.62,0.72,g)];
+    put('tuft',vi('tuft'),x,s.y-0.003,z,lerp(0.055,0.085,rnd())*(1-0.35*smooth(4.2,4.9,s.y)),true,c); take(x,z,0.03); return true; });
+
+  // 5. wildflowers in small drifts in the green meadows
+  for(let g=0;g<16;g++){ let cx=0,cz=0,ok=false;
+    for(let t=0;t<400&&!ok;t++){ cx=lerp(-4.8,5.2,rnd()); cz=lerp(-5,4,rnd()); const s=vegAt(cx,cz); ok=!!s&&!s.wet&&s.dw>0.25&&s.ny>0.85&&s.green>0.01&&s.y>2.7&&s.y<3.9; }
+    if(!ok) continue; const sp='daisy', n=5+((rnd()*6)|0);
+    for(let i=0;i<n;i++){ const a=rnd()*6.283, r=Math.sqrt(rnd())*0.2, x=cx+Math.cos(a)*r, z=cz+Math.sin(a)*r, s=vegAt(x,z);
+      if(!s||s.wet||!free(x,z,0.022)) continue; put(sp,vi(sp),x,s.y-0.002,z,lerp(0.06,0.085,rnd()),true); take(x,z,0.022); } }
+
+  // build one instanced mesh per variant part
+  const m4=new THREE.Matrix4(), q=new THREE.Quaternion(), e=new THREE.Euler(), pv=new THREE.Vector3(), sv=new THREE.Vector3(), col=new THREE.Color();
+  const grp=new THREE.Group(); grp.name='plants'; scene.add(grp); VEG.grp=grp;
+  for(const [name,list] of Object.entries(out)){ const sp=VEG.sp[name]; if(!sp) continue;
+    sp.v.forEach((vr,vi)=>{ const L=list.filter(a=>a[0]===vi); if(!L.length) return;
+      for(const part of vr.parts){
+        const mat=part._m||(part._m=vegMat(part.mat,sp.stiff,(sp.tint&&sp.tint[part.mat.name])||sp.tintAll||1));
+        const im=new THREE.InstancedMesh(part.geo,mat,L.length); im.name='veg_'+name; im.frustumCulled=false;
+        L.forEach((a,i)=>{ e.set(a[6],a[5],a[7]); q.setFromEuler(e); pv.set(a[1],a[2],a[3]); sv.setScalar(a[4]); m4.compose(pv,q,sv); im.setMatrixAt(i,m4);
+          const c=a[9]||[1,1,1]; col.setRGB(a[8]*c[0],a[8]*c[1]*(0.98+0.04*Math.sin(a[1]*3)),a[8]*c[2]*0.97); im.setColorAt(i,col); });
+        im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true; im.userData.full=L.length; grp.add(im); VEG.ims.push(im); } }); }
+  VEG.counts=Object.fromEntries(Object.entries(out).map(([k,v])=>[k,v.length]));
+}
+function updatePlants(dt){ if(!VEG.built) return; VEG.u.uTime.value+=dt; VEG.u.uWind.value+=(S.wind-VEG.u.uWind.value)*Math.min(1,dt*2);
+  if(PERF.low&&!VEG.lowDone){ VEG.lowDone=true; for(const im of VEG.ims) if(/tree|maize|tuft|clover/.test(im.name)) im.count=Math.ceil(im.userData.full*0.6); } }
+
 /* ---------- Cloud magnifier: what happens inside a cloud ---------- */
-const MG={open:false,ci:0,t:0,R:150,mols:[],drops:[],cv:$('mag-cv'),ctx:null,phase:-1};
+const MG={open:false,ci:0,t:0,R:150,mols:[],drops:[],cv:$('mag-cv'),ctx:null,phase:-1,cold:false};
 MG.ctx=MG.cv.getContext('2d');
-const MAG_T=14;   // seconds for one loop: A vapour 0-3, B condensing 3-7, C coalescence 7-11, D falling 11-14
+// one loop: A vapour 0-3, B condensing (warm cloud) or freezing into ice (cold cloud) 3-8, C droplets join or the ice crystal branches 8-12, D falling 12-15.5
+const TB=3, TC=8, TD=12, MAG_T=15.5;
 function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim()||'#888'; }
+
+/* 3D molecules. The H2O model is recoloured to the CPK convention used in textbooks: oxygen red, hydrogen white. */
+const CPK={O:0xe03a2e,H:0xf4f6f8,bond:0xd3d9df};
+const MK={mol:null,liq:null};
+const acomp=(a,i,c)=>c===0?a.getX(i):c===1?a.getY(i):c===2?a.getZ(i):a.getW(i);   // one component, de-quantised
+function floatGeom(g,m4){   // copy to plain float attributes (the compressed models store integers) and bake the node transform
+  const o=new THREE.BufferGeometry();
+  for(const k of ['position','normal','uv']){ const a=g.attributes[k]; if(!a) continue; const n=a.itemSize;
+    const f=new Float32Array(a.count*n); for(let i=0;i<a.count;i++) for(let c=0;c<n;c++) f[i*n+c]=acomp(a,i,c);
+    o.setAttribute(k,new THREE.BufferAttribute(f,n)); }
+  if(g.index) o.setIndex(g.index.clone());
+  o.applyMatrix4(m4); if(!o.attributes.normal) o.computeVertexNormals(); o.normalizeNormals(); return o;
+}
+function onH2O(g){
+  g.scene.updateMatrixWorld(true);
+  const parts=[]; g.scene.traverse(o=>{ if(o.isMesh) parts.push({geo:floatGeom(o.geometry,o.matrixWorld),col:o.material.color.clone()}); });
+  for(const p of parts){ p.box=new THREE.Box3().setFromBufferAttribute(p.geo.attributes.position); p.size=p.box.getSize(new THREE.Vector3()); }
+  const grey=c=>Math.abs(c.r-c.g)<0.06&&Math.abs(c.g-c.b)<0.06;
+  const bond=parts.find(p=>grey(p.col)), atoms=parts.filter(p=>p!==bond);
+  const elong=p=>Math.max(p.size.x,p.size.y,p.size.z)/Math.max(1e-6,Math.min(p.size.x,p.size.y,p.size.z));
+  atoms.sort((a,b)=>elong(a)-elong(b));              // oxygen is one round atom; the hydrogen mesh holds two
+  const Op=atoms[0], Hp=atoms[1]; if(!Op||!Hp) return;
+  const O=Op.box.getCenter(new THREE.Vector3()), mid=Hp.box.getCenter(new THREE.Vector3()), pos=Hp.geo.attributes.position, v=new THREE.Vector3();
+  const b=mid.clone().sub(O).normalize();
+  let p=new THREE.Vector3(), far=0;
+  for(let i=0;i<pos.count;i++){ v.fromBufferAttribute(pos,i); const d=v.distanceTo(mid); if(d>far){ far=d; p.copy(v).sub(mid); } }
+  const hc=s=>{ const c=new THREE.Vector3(); let n=0; for(let i=0;i<pos.count;i++){ v.fromBufferAttribute(pos,i); if(v.clone().sub(mid).dot(p)*s>0){ c.add(v); n++; } } return c.divideScalar(Math.max(1,n)); };
+  let h1=hc(1), h2=hc(-1); p.copy(h1).sub(h2); p.addScaledVector(b,-p.dot(b)).normalize(); h1=hc(1); h2=hc(-1);
+  const OH=(h1.distanceTo(O)+h2.distanceTo(O))/2;
+  const n=new THREE.Vector3().crossVectors(b,p);
+  // canonical frame: oxygen at the origin, the H–O–H bisector along +x, the molecule in the x–y plane, O–H = 1
+  const F=new THREE.Matrix4().makeScale(1/OH,1/OH,1/OH).multiply(new THREE.Matrix4().makeBasis(b,p,n).invert()).multiply(new THREE.Matrix4().makeTranslation(-O.x,-O.y,-O.z));
+  for(const q of parts) q.geo.applyMatrix4(F);
+  const ang=h1.clone().sub(O).angleTo(h2.clone().sub(O));
+  MK.mol={O:Op.geo,H:Hp.geo,B:bond?bond.geo:null,rO:Op.size.x/2/OH,rH:Math.min(Hp.size.x,Hp.size.y,Hp.size.z)/2/OH,angle:ang};
+}
+function onLW(g){
+  const box=new THREE.Box3().setFromObject(g.scene), c=box.getCenter(new THREE.Vector3()), r=box.getSize(new THREE.Vector3()).length()/2;
+  g.scene.position.sub(c); const piv=new THREE.Group(); piv.add(g.scene); piv.scale.setScalar(1/r);
+  g.scene.traverse(o=>{ if(o.isMesh){ const red=o.material.color.r>0.6&&o.material.color.g<0.5;
+    o.material=new THREE.MeshStandardMaterial({color:red?CPK.O:CPK.H,roughness:red?0.35:0.45,transparent:true,opacity:1}); o.frustumCulled=false; } });
+  const outer=new THREE.Group(); outer.add(piv); MK.liq=outer;   // the outer group is sized in the lens; piv keeps the model at radius 1
+}
+
+/* Hexagonal ice (ice Ih), built from the H2O model. Oxygens sit on a wurtzite-type lattice (a = 4.52 Å, c = 7.36 Å),
+   each joined to four neighbours 2.76 Å away. Hydrogens follow the ice rules: two on every oxygen, one on every O···O link. */
+function buildIce(){
+  const U=0.96, a=4.52/U, c=7.36/U, u=3/8, nx=4, ny=4, nz=2, s3=Math.sqrt(3);
+  const basis=[[1/3,2/3,0],[2/3,1/3,0.5],[1/3,2/3,u],[2/3,1/3,0.5+u]];
+  const F=[]; for(let i=0;i<nx;i++) for(let j=0;j<ny;j++) for(let k=0;k<nz;k++) for(const q of basis) F.push([i+q[0],j+q[1],k+q[2]]);
+  const cart=(f,o)=>o.set(f[0]*a-f[1]*a/2, f[1]*a*s3/2, f[2]*c);   // hexagonal axes 120° apart
+  const wrap=(d,n)=>d-n*Math.round(d/n);
+  const dvec=(i,j,o)=>cart([wrap(F[j][0]-F[i][0],nx),wrap(F[j][1]-F[i][1],ny),wrap(F[j][2]-F[i][2],nz)],o);
+  const dOO=u*c, adj=F.map(()=>[]), edges=[], t=new THREE.Vector3();
+  for(let i=0;i<F.length;i++) for(let j=i+1;j<F.length;j++){ if(Math.abs(dvec(i,j,t).length()-dOO)<0.3){ adj[i].push(edges.length); adj[j].push(edges.length); edges.push({i,j,from:-1}); } }
+  // every oxygen has four links, so walking unused links always closes a loop: orienting links along each loop gives every oxygen two donated hydrogens
+  for(let s=0;s<F.length;s++){ let v=s; for(;;){ const e=adj[v].map(k=>edges[k]).find(e=>e.from<0); if(!e) break; e.from=v; v=e.i===v?e.j:e.i; } }
+  // a small piece around one of the open hexagonal channels that run along the c axis
+  const ctr=new THREE.Vector3(); cart([2,2,1],ctr); const sel=[], idx=new Map();
+  for(let i=0;i<F.length;i++){ if(F[i][2]<0.5||F[i][2]>=1.5) continue; cart(F[i],t).sub(ctr); if(Math.hypot(t.x,t.y)<=5.6/U){ idx.set(i,sel.length); sel.push(i); } }
+  const sites=sel.map(i=>{ const p=cart(F[i],new THREE.Vector3()).sub(ctr), don=[];
+    for(const k of adj[i]){ const e=edges[k]; if(e.from===i){ const o=e.i===i?e.j:e.i; don.push({o,d:dvec(i,o,new THREE.Vector3()).normalize()}); } }
+    const B=don[0].d.clone().add(don[1].d).normalize(), P=don[0].d.clone().sub(don[1].d).normalize(), N=new THREE.Vector3().crossVectors(B,P);
+    return {i,p,q:new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(B,P,N)),don,ord:0,r:Math.hypot(p.x,p.y)}; });
+  const order=sites.map((s,k)=>k).sort((x,y)=>sites[x].r-sites[y].r||sites[x].p.z-sites[y].p.z);
+  order.forEach((k,o)=>sites[k].ord=o);
+  const sorted=order.map(k=>sites[k]);
+  const hb=[];   // hydrogen bonds: from a donated hydrogen to the neighbouring oxygen
+  for(const s of sorted) for(const d of s.don){ const k=idx.get(d.o); if(k===undefined) continue; const tgt=sites[k];
+    const dir=tgt.p.clone().sub(s.p).normalize(), L=tgt.p.distanceTo(s.p);
+    hb.push({a:s.p.clone().addScaledVector(dir,1+(MK.mol?MK.mol.rH:0.4)+0.05), b:s.p.clone().addScaledVector(dir,L-(MK.mol?MK.mol.rO:0.6)-0.05), ord:Math.max(s.ord,tgt.ord)}); }
+  hb.sort((x,y)=>x.ord-y.ord);
+  return {sites:sorted,hb};
+}
+
+const M3={ok:null};
+const MAG_S=0.14;   // lens units per O–H length: oxygen ≈ 0.05 of the lens radius
+function mag3D(){
+  if(M3.ok!==null) return M3.ok;
+  if(!MK.mol) return false;
+  try{
+    const cv=document.createElement('canvas');
+    const r=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true,powerPreference:'low-power'}); r.setClearColor(0x000000,0); r.setPixelRatio(1);
+    const sc=new THREE.Scene(), k=1/0.92, cam=new THREE.OrthographicCamera(-k,k,k,-k,-10,10); cam.position.z=5;
+    sc.add(new THREE.HemisphereLight(0xffffff,0x8a97a6,1.7)); const dl=new THREE.DirectionalLight(0xffffff,2.0); dl.position.set(-1.4,2,3); sc.add(dl);
+    const mats={O:new THREE.MeshStandardMaterial({color:CPK.O,roughness:0.35}),H:new THREE.MeshStandardMaterial({color:CPK.H,roughness:0.45}),B:new THREE.MeshStandardMaterial({color:CPK.bond,roughness:0.5})};
+    const ice=buildIce(), N=Math.max(34,ice.sites.length), im={};
+    for(const key of ['O','H','B']) if(MK.mol[key]){ const m=new THREE.InstancedMesh(MK.mol[key],mats[key],N); m.frustumCulled=false; m.count=0; sc.add(m); im[key]=m; }
+    const lat=new THREE.Group(); sc.add(lat); lat.scale.setScalar(MAG_S);
+    const lp=new Float32Array(ice.hb.length*6); ice.hb.forEach((h,i)=>{ h.a.toArray(lp,i*6); h.b.toArray(lp,i*6+3); });
+    const lg=new THREE.BufferGeometry(); lg.setAttribute('position',new THREE.BufferAttribute(lp,3));
+    const hbl=new THREE.LineSegments(lg,new THREE.LineDashedMaterial({color:0x2f7fc4,dashSize:0.16,gapSize:0.12,transparent:true,opacity:0.9}));
+    hbl.computeLineDistances(); hbl.frustumCulled=false; lat.add(hbl);
+    let liq=null; if(MK.liq){ liq=MK.liq; liq.visible=false; sc.add(liq); }
+    Object.assign(M3,{r,cv,sc,cam,im,lat,hbl,ice,liq,N,ok:true});
+  }catch(e){ console.warn("3D magnifier unavailable, using the drawn version",e); M3.err=String(e&&e.stack||e); M3.ok=false; }
+  return M3.ok;
+}
+const _mm=new THREE.Matrix4(), _mq=new THREE.Quaternion(), _mq2=new THREE.Quaternion(), _mp=new THREE.Vector3(), _mp2=new THREE.Vector3(), _ms=new THREE.Vector3(), _ax3=new THREE.Vector3();
+function setMol(k,p,q,s){ _ms.setScalar(s); _mm.compose(p,q,_ms); for(const key in M3.im) M3.im[key].setMatrixAt(k,_mm); }
+
 function magSetup(){
-  MG.mols=[]; for(let i=0;i<34;i++) MG.mols.push({x:Math.random()*2-1,y:Math.random()*2-1,a:Math.random()*6.28,vx:(Math.random()-.5)*0.5,vy:(Math.random()-.5)*0.5,stuck:false,ts:3+Math.random()*3.6});
+  MG.cold = MG.ci===1 && A.snowPeak;   // the cloud over the freezing peaks makes ice, the one over the plains makes droplets
+  const n=MG.cold&&M3.ok&&M3.ice?M3.ice.sites.length:34;
+  MG.mols=[]; for(let i=0;i<n;i++) MG.mols.push({x:Math.random()*1.8-0.9,y:Math.random()*1.8-0.9,z:Math.random()*0.8-0.4,a:Math.random()*6.28,vx:(Math.random()-.5)*0.5,vy:(Math.random()-.5)*0.5,
+    stuck:false,ts:TB+Math.random()*2.2,q:new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random()*6.3,Math.random()*6.3,Math.random()*6.3)),w:new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5).normalize(),fx:null});
   MG.drops=[]; for(let i=0;i<8;i++){ const a=i/8*6.28+0.4, r=0.5+Math.random()*0.2; MG.drops.push({x:Math.cos(a)*r,y:Math.sin(a)*r*0.8,r:0.07+Math.random()*0.025,s:Math.random()}); }
   MG.haze=[]; for(let i=0;i<46;i++) MG.haze.push({x:Math.random()*2-1,y:Math.random()*2-1,r:0.012+Math.random()*0.014,v:0.02+Math.random()*0.04});
+  $('mag').querySelector('.mtitle').textContent=t(MG.cold?'mag_title_ice':'mag_title');
 }
 function openMag(ci){
   const c=clouds[ci];
   if(c.u<5){ callout('co_wait','cond',[c.rest.x,A.yc+0.5,c.rest.z],3); return; }
+  mag3D();
   MG.open=true; MG.ci=ci; MG.t=0; MG.phase=-1; magSetup();
   const el=$('mag'); el.hidden=false; placeMag(); $('magline').style.display='';
 }
@@ -1098,51 +1449,124 @@ function tag(ctx,txt,x,y,R){
   ctx.beginPath(); ctx.roundRect?ctx.roundRect(x-w/2,y-h/2,w,h,5):ctx.rect(x-w/2,y-h/2,w,h); ctx.fill(); ctx.stroke();
   ctx.fillStyle='#10262c'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(txt,x,y+0.5);
 }
+function drawDust(ctx,x,y,s){ // a mineral dust grain: the usual seed for ice in clouds
+  ctx.save(); ctx.translate(x,y); ctx.fillStyle='#8c7f72'; ctx.strokeStyle='#5b5249'; ctx.lineWidth=1.2; ctx.beginPath();
+  [1,0.72,0.95,0.68,1.05,0.8,0.9].forEach((r,i,k)=>{ const a=i/k.length*6.283+0.3; ctx.lineTo(Math.cos(a)*s*r,Math.sin(a)*s*r); });
+  ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+function drawFlake(ctx,x,y,L,g,rot){ // six-fold ice crystal: a hexagonal plate that sprouts six branched arms as it grows
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.lineCap='round'; ctx.lineJoin='round';
+  const plate=L*0.17*smooth(0,0.25,g), arm=L*smooth(0.12,0.85,g);
+  const hex=r=>{ ctx.beginPath(); for(let i=0;i<6;i++){ const a=i*Math.PI/3; ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r); } ctx.closePath(); };
+  for(const [w,col] of [[0.075,'rgba(52,112,178,.6)'],[0.038,'#f5fbff']]){
+    ctx.strokeStyle=col; ctx.lineWidth=Math.max(1.2,L*w);
+    if(arm>plate) for(let i=0;i<6;i++){ const a=i*Math.PI/3, ca=Math.cos(a), sa=Math.sin(a);
+      ctx.beginPath(); ctx.moveTo(ca*plate*0.8,sa*plate*0.8); ctx.lineTo(ca*arm,sa*arm);
+      for(const f of [0.42,0.62,0.8]){ const d=f*L; if(d>arm*0.98) continue;
+        const bl=L*0.3*(1-f*0.75)*smooth(0.25+f*0.6,1,g);
+        for(const sd of [-1,1]){ const b=a+sd*Math.PI/3; ctx.moveTo(ca*d,sa*d); ctx.lineTo(ca*d+Math.cos(b)*bl,sa*d+Math.sin(b)*bl); } }
+      ctx.stroke(); }
+  }
+  if(plate>0.5){ hex(plate); ctx.fillStyle='rgba(236,248,255,.95)'; ctx.fill(); ctx.strokeStyle='rgba(52,112,178,.7)'; ctx.lineWidth=Math.max(1,L*0.025); ctx.stroke();
+    hex(plate*0.55); ctx.strokeStyle='rgba(52,112,178,.35)'; ctx.stroke(); }
+  ctx.restore();
+}
 function drawMag(raw){
   if(!MG.open) return;
   placeMag();
   if(!S.paused) MG.t+=raw; if(MG.t>=MAG_T){ MG.t=0; magSetup(); }
-  const tt=MG.t, R=MG.R, ctx=MG.ctx, D=2*R, P=v=>R+v*R*0.92;
-  const phase=tt<3?0:tt<7?1:tt<11?2:3;
-  if(phase!==MG.phase){ MG.phase=phase; $('mag-cap').textContent=t(['mag_a','mag_b','mag_c','mag_d'][phase]); }
+  const tt=MG.t, R=MG.R, ctx=MG.ctx, D=2*R, P=v=>R+v*R*0.92, cold=MG.cold, use3=M3.ok===true;
+  const phase=tt<TB?0:tt<TC?1:tt<TD?2:3;
+  if(phase!==MG.phase){ MG.phase=phase; $('mag-cap').textContent=t((cold?['mag_a','ice_b','ice_c','ice_d']:['mag_a','mag_b','mag_c','mag_d'])[phase]); }
   ctx.clearRect(0,0,D,D);
-  const bg=ctx.createLinearGradient(0,0,0,D);
-  const cool=smooth(2.5,4,tt);
-  bg.addColorStop(0,`rgb(${lerp(250,214,cool)|0},${lerp(236,229,cool)|0},${lerp(214,242,cool)|0})`); bg.addColorStop(1,`rgb(${lerp(244,196,cool)|0},${lerp(226,214,cool)|0},${lerp(204,232,cool)|0})`);
+  const bg=ctx.createLinearGradient(0,0,0,D), cool=smooth(TB-0.5,TB+1,tt);
+  bg.addColorStop(0,`rgb(${lerp(250,cold?206:214,cool)|0},${lerp(236,cold?226:229,cool)|0},${lerp(214,cold?246:242,cool)|0})`);
+  bg.addColorStop(1,`rgb(${lerp(244,cold?186:196,cool)|0},${lerp(226,cold?208:214,cool)|0},${lerp(204,cold?236:232,cool)|0})`);
   ctx.fillStyle=bg; ctx.fillRect(0,0,D,D);
-  const ms=R*0.045;
+  const ms=R*0.045, run=S.paused?0:raw;
   if(phase<=1){
-    const nx=P(0), ny=P(0), stuckN=MG.mols.filter(m=>m.stuck).length;
-    const dr=R*0.06+R*0.19*Math.sqrt(stuckN/MG.mols.length);
-    for(const m of MG.mols){
-      if(m.stuck) continue;
-      if(tt>m.ts){ // drawn to the crystal once the air is cool enough
-        const dx=-m.x, dy=-m.y, d=Math.hypot(dx,dy);
-        if(d<(dr/(R*0.92))+0.02){ m.stuck=true; continue; }
-        m.x+=dx/d*0.55*raw; m.y+=dy/d*0.55*raw;
-      } else { m.x+=m.vx*raw*(1.4-cool*0.6); m.y+=m.vy*raw*(1.4-cool*0.6); if(Math.abs(m.x)>0.95) m.vx*=-1; if(Math.abs(m.y)>0.95) m.vy*=-1; }
-      m.a+=raw*1.5; drawWater(ctx,P(m.x),P(m.y),ms,m.a);
+    const TG=[], tg=(...q)=>TG.push(q);
+    let nMol=0, lastFree=null;
+    // the 3D scene shares the lens coordinates: x right, y up, the lens radius is 1/0.92
+    const lat=use3?M3.lat:null;
+    // look almost straight down the c axis, where the hexagonal rings show
+    if(use3){ lat.rotation.set(-0.2+0.08*Math.sin(tt*0.5),0.22*Math.sin(tt*0.42),tt*0.06); lat.updateMatrixWorld(true); lat.getWorldQuaternion(_mq2); }
+    if(!cold){
+      const nx=P(0), ny=P(0), stuckN=MG.mols.filter(m=>m.stuck).length;
+      const dr=R*0.06+R*0.19*Math.sqrt(stuckN/MG.mols.length);
+      const zoom=smooth(5.3,6.1,tt);                 // the view moves into the droplet: liquid water, molecules close together
+      for(const m of MG.mols){
+        if(m.stuck) continue;
+        if(tt>m.ts){ const dx=-m.x, dy=-m.y, d=Math.hypot(dx,dy);
+          if(d<(dr/(R*0.92))+0.02){ m.stuck=true; continue; }
+          m.x+=dx/d*0.7*run; m.y+=dy/d*0.7*run; }
+        else { m.x+=m.vx*run*(1.4-cool*0.6); m.y+=m.vy*run*(1.4-cool*0.6); if(Math.abs(m.x)>0.95) m.vx*=-1; if(Math.abs(m.y)>0.95) m.vy*=-1; }
+        m.a+=run*1.5; if(zoom>0.4) continue; lastFree=m;
+        if(use3){ m.q.premultiply(_mq.setFromAxisAngle(m.w,run*1.6)); _mp.set(m.x,-m.y,m.z); setMol(nMol++,_mp,m.q,MAG_S); }
+        else drawWater(ctx,P(m.x),P(m.y),ms,m.a);
+      }
+      const dropR=lerp(dr,R*0.97,zoom);
+      ctx.globalAlpha=1-0.45*zoom; if(stuckN>0||zoom>0) drawDrop(ctx,nx,ny,dropR,false); ctx.globalAlpha=1;
+      if(zoom<1){ ctx.globalAlpha=1-zoom; drawSalt(ctx,nx,ny,R*0.045); ctx.globalAlpha=1; }
+      if(use3&&M3.liq){ const k=smooth(5.6,6.4,tt); M3.liq.visible=k>0;
+        if(k>0){ M3.liq.scale.setScalar(0.86*(0.75+0.25*k)); M3.liq.rotation.set(0.3,tt*0.25,0.1); M3.liq.traverse(o=>{ if(o.isMesh) o.material.opacity=k; }); } }
+      if(zoom<0.5){ if(lastFree) tg(t('ml_mol'),P(lastFree.x),P(lastFree.y)-ms*3.2,R); tg(t(stuckN>6?'ml_drop':'ml_salt'),R,R+R*0.36,R); }
+    } else {
+      // freezing cloud: molecules settle on a dust grain and lock, one by one, into the hexagonal ice lattice
+      const sites=use3?M3.ice.sites:null, n=MG.mols.length;
+      drawDust(ctx,P(0),P(0),R*0.05);
+      let placed=0;
+      MG.mols.forEach((m,i)=>{
+        const start=TB+0.2+i*(3.3/n), k=use3?smooth(start,start+0.75,tt):0;
+        if(tt<start||!use3){
+          if(!use3&&tt>start){ m.stuck=true; return; }
+          m.x+=m.vx*run*(1.4-cool*0.6); m.y+=m.vy*run*(1.4-cool*0.6); if(Math.abs(m.x)>0.95) m.vx*=-1; if(Math.abs(m.y)>0.95) m.vy*=-1; m.a+=run*1.5; lastFree=m;
+          if(use3){ m.q.premultiply(_mq.setFromAxisAngle(m.w,run*1.6)); _mp.set(m.x,-m.y,m.z); setMol(nMol++,_mp,m.q,MAG_S); }
+          else drawWater(ctx,P(m.x),P(m.y),ms,m.a);
+          return; }
+        if(!m.fx){ m.fx=new THREE.Vector3(m.x,-m.y,m.z); m.fq=m.q.clone(); }
+        const s=sites[i]; _mp2.copy(s.p).applyMatrix4(lat.matrixWorld); _mq.copy(_mq2).multiply(s.q);
+        _mp.lerpVectors(m.fx,_mp2,ease(k)); const q=m.fq.clone().slerp(_mq,ease(k));
+        setMol(nMol++,_mp,q,MAG_S); if(k>=1) placed=i+1;
+      });
+      if(use3){ let c=0; const hb=M3.ice.hb; while(c<hb.length&&hb[c].ord<placed) c++; M3.hbl.geometry.setDrawRange(0,c*2); M3.hbl.visible=c>0; }
+      if(!use3){ const g=smooth(TB+0.5,TC,tt)*0.3; drawFlake(ctx,P(0),P(0),R*0.5,g,0); }
+      if(lastFree&&placed<n*0.6) tg(t('ml_mol'),P(lastFree.x),P(lastFree.y)-ms*3.2,R);
+      tg(t(placed<n*0.3?'ml_dust':'ml_ice'),R,R*1.78,R);
     }
-    if(stuckN>0) drawDrop(ctx,nx,ny,dr,false);
-    drawSalt(ctx,nx,ny,R*0.045);
-    tag(ctx,t('ml_mol'),P(MG.mols[0].stuck?0.45:MG.mols[0].x),P(MG.mols[0].stuck?-0.7:MG.mols[0].y)-ms*3.2,R);
-    tag(ctx,t(stuckN>6?'ml_drop':'ml_salt'),R,R+R*0.36,R);
-  } else {
+    if(use3){
+      for(const key in M3.im){ M3.im[key].count=nMol; M3.im[key].instanceMatrix.needsUpdate=true; }
+      M3.lat.visible=cold; if(cold&&M3.liq) M3.liq.visible=false;
+      const px=Math.round(D*Math.min(2,devicePixelRatio||1)); if(M3.cv.width!==px) M3.r.setSize(px,px,false);
+      M3.r.render(M3.sc,M3.cam); ctx.drawImage(M3.cv,0,0,D,D);
+      if(!cold&&smooth(5.3,6.1,tt)>=0.5) tg(t('ml_liq'),R,R*1.78,R);
+    }
+    for(const q of TG) tag(ctx,...q);
+  } else if(!cold){
     // countless tiny droplets in the background
     ctx.fillStyle='rgba(90,160,215,.45)';
-    for(const h of MG.haze){ h.y-=h.v*raw*0.3; if(h.y<-1) h.y=1; ctx.beginPath(); ctx.arc(P(h.x),P(h.y),h.r*R,0,6.283); ctx.fill(); }
+    for(const h of MG.haze){ h.y-=h.v*run*0.3; if(h.y<-1) h.y=1; ctx.beginPath(); ctx.arc(P(h.x),P(h.y),h.r*R,0,6.283); ctx.fill(); }
     // droplets drift in one by one and join the growing drop (volume adds up, so the radius grows as a cube root)
     let vol=0.12**3; const pos=[];
     for(const d of MG.drops){
-      const k=ease(clamp((tt-7.4-d.s*1.6)/1.8,0,1));
+      const k=ease(clamp((tt-TC-0.4-d.s*1.6)/1.8,0,1));
       const x=lerp(d.x,0,k)+Math.sin(tt*1.3+d.s*6)*0.03*(1-k), y=lerp(d.y,0,k);
       pos.push([x,y,k]); if(k>=1) vol+=d.r**3;
     }
     const big=Math.cbrt(vol);
     pos.forEach(([x,y,k],i)=>{ const d=MG.drops[i]; if(k>=1||Math.hypot(x,y)<big-d.r*0.3) return; drawDrop(ctx,P(x),P(y),d.r*R*0.92,false); });
-    let by=0; if(phase===3) by=Math.pow((tt-11)/3,2)*1.6;
+    let by=0; if(phase===3) by=Math.pow((tt-TD)/(MAG_T-TD),2)*1.6;
     drawDrop(ctx,P(0),P(by),big*R*0.92,phase===3);
     tag(ctx,t(phase===3?'ml_rain':'ml_drop'),R,P(by)+big*R+R*0.12,R);
+  } else {
+    // the ice crystal grows while the supercooled droplets around it shrink: their water evaporates and freezes onto the ice
+    const g=phase===2?smooth(TC,TD-0.4,tt):1, fall=phase===3?Math.pow((tt-TD)/(MAG_T-TD),2)*1.6:0;
+    ctx.fillStyle='rgba(90,160,215,.35)';
+    for(const h of MG.haze){ h.y-=h.v*run*0.3; if(h.y<-1) h.y=1; ctx.beginPath(); ctx.arc(P(h.x),P(h.y),h.r*R*(1-0.6*g),0,6.283); ctx.fill(); }
+    for(const d of MG.drops){ const r=d.r*(1-smooth(TC+d.s*0.8,TD-0.6,tt)); if(r<0.004) continue;
+      const x=d.x*(1-0.12*g), y=d.y*(1-0.12*g)+fall*0.4; drawDrop(ctx,P(x),P(y),r*R*0.92,false); }
+    drawFlake(ctx,P(0),P(fall),R*0.6,g,tt*0.05);
+    tag(ctx,t(phase===3?'ml_flake':'ml_crys'),R,clamp(P(fall)+R*0.7,0,R*1.78),R);
   }
   // lens rim shading
   const rim=ctx.createRadialGradient(R,R,R*0.82,R,R,R); rim.addColorStop(0,'rgba(0,0,0,0)'); rim.addColorStop(1,'rgba(0,0,0,.14)');
