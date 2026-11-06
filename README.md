@@ -6,7 +6,7 @@
 
 <h3 align="center"><em>Interactive 3D Water Cycle Simulator</em></h3>
 
-An interactive 3D simulation of the water cycle: evaporation, condensation, precipitation, runoff and groundwater, driven by real atmospheric physics and built for classroom smart panels.
+The water cycle in 3D (evaporation, condensation, precipitation, runoff and groundwater), driven by real atmospheric physics and built for classroom smart panels.
 
 <p align="center">
   <a href="https://zeus-cyclonix.pages.dev"><strong>Enter the Cycle →</strong></a>
@@ -16,29 +16,27 @@ An interactive 3D simulation of the water cycle: evaporation, condensation, prec
 
 ✨ **Features**
 
-- ☀️ A glowing Sun whose corona and light shafts grow with its heat: stronger sunlight warms the air and speeds up evaporation
-- 💧 Evaporation from the sea and lake, plus transpiration from plants
-- 🌳 Plants by vegetation zone: maize fields and meadows on the plains, tree groves and ferns by the water, a forest belt thinning towards the tree line, all swaying with the wind
-- ☁️ Condensation at the dew point, with a flat cloud base that rises and falls with humidity
-- 🔍 Cloud magnifier in 3D: water molecules gather on a salt crystal into a liquid droplet, droplets join, and a raindrop falls
-- 🧊 Freezing cloud: molecules lock into a hexagonal ice lattice on a dust grain and grow into a six-sided snowflake
-- 🌧️ Rain on the plains and ❄️ snow on the freezing peaks, switching with temperature
-- 🌊 Runoff through rivers and groundwater seeping through the rock, back to the sea
-- 🌫️ Sea mist that appears only near saturation (vapour itself is invisible), and ripples where rain lands on water
-- 🌡️ Live readings: dew point, cloud-base height, air temperature with height, and a water budget
-- 🎓 Teach mode: evaporation, condensation and precipitation, one step at a time
+- ☀️ Sun's heat slider: a brighter Sun, faster evaporation
+- 💧 Evaporation from sea and lake, transpiration from plants
+- ☁️ Clouds form at the dew point; rain on the plains, snow on the peaks
+- 🔍 Cloud magnifier: molecules to droplet to raindrop, or to ice lattice to snowflake
+- 🌊 Runoff, infiltration and groundwater back to the sea
+- 🌳 Plants by vegetation zone, swaying with the wind
+- 🌫️ Sea mist near saturation, ripples where rain meets water
+- 🌡️ Live dew point, cloud base, lapse rate and water budget
+- 🎓 Teach mode, one stage at a time
 - 📴 Works offline as a single HTML file
 
 ---
 
 🔬 **Science Behind It**
 
-- Evaporation rate from Dalton's law: temperature, humidity and wind
-- Dew point from the Magnus formula
-- Cloud base ≈ 125 m for every 1 °C gap between air temperature and dew point
-- Rising air cools by about 10 °C per km; surrounding air by about 6.5 °C per km
-- Hexagonal ice (Ih): oxygens 2.76 Å apart, each with four hydrogen bonds, following the ice rules
-- Ice crystals grow at the expense of supercooled droplets (Bergeron process)
+- Evaporation: Dalton's law (temperature, humidity, wind)
+- Dew point: Magnus formula
+- Cloud base: ≈ 125 m per 1 °C gap between air temperature and dew point
+- Lapse rates: rising air ≈ 10 °C/km, surrounding air ≈ 6.5 °C/km
+- Ice Ih: hexagonal lattice, O–O 2.76 Å, four hydrogen bonds per molecule
+- Snow growth: Bergeron process
 
 ---
 
@@ -57,7 +55,7 @@ Repository: GitHub & Codeberg
 | 👤 Project Designer | **Sai Prasad**, Msc. Ag. Entomology, NET |
 | 🤖 Development | Claude Opus 5.5 (AI-assisted development) |
 
-**3D Models** · from Sketchfab
+**3D Models** · Sketchfab
 
 | | Asset | Model | Creator | Licence |
 |:-:|:--|:--|:--|:--|
@@ -72,7 +70,7 @@ Repository: GitHub & Codeberg
 | 🌽 | Maize | [Plant](https://sketchfab.com/3d-models/plant-e94595cf83e74b509fc5b2eac092b4bb) | SomeKevin | CC BY 4.0 |
 | 🌳 | Trees, grass tufts | [Low Poly Tree Scene Free](https://sketchfab.com/3d-models/low-poly-tree-scene-free-89daa5e21f0d4f08a59dba0d566e88bd) | Nicholas-3D | CC BY 4.0 |
 | 🍀 | Clover | [Clovers - Plants / Foliage](https://sketchfab.com/3d-models/clovers-plants-foliage-d68dc45e329e48e3bc83ecc5448a6c25) | Studio Lab | CC BY 4.0 |
-| 🌿 | Ferns, white wildflowers | [Plants Asset Set](https://sketchfab.com/3d-models/plants-asset-set-2edf52774f4d4cde8d8c3a19b8dda205) | Em Marshall | CC BY 4.0 |
+| 🌿 | Ferns, wildflowers | [Plants Asset Set](https://sketchfab.com/3d-models/plants-asset-set-2edf52774f4d4cde8d8c3a19b8dda205) | Em Marshall | CC BY 4.0 |
 
 **Libraries and Assets**
 
@@ -88,4 +86,4 @@ Repository: GitHub & Codeberg
 
 📜 **License**
 
-Original source code is distributed under the GNU GPL-3.0 License (LICENSE). Third-party assets remain subject to their respective licenses.
+Original source code: GNU GPL-3.0 (LICENSE). Third-party assets keep their own licences.
