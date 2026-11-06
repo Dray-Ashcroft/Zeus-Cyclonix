@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner/banner.png" alt="Zeus Cyclonix" width="100%">
+  <img src="assets/banner.png" alt="Zeus Cyclonix" width="100%">
 </p>
 
 <h1 align="center">🌀 Zeus Cyclonix</h1>
@@ -16,7 +16,7 @@ An interactive 3D simulation of the water cycle: evaporation, condensation, prec
 
 ✨ **Features**
 
-- ☀️ Adjustable sun's rays: stronger sunlight warms the air and speeds up evaporation
+- ☀️ A glowing Sun whose corona and light shafts grow with its heat: stronger sunlight warms the air and speeds up evaporation
 - 💧 Evaporation from the sea and lake, plus transpiration from plants
 - 🌳 Plants by vegetation zone: maize fields and meadows on the plains, tree groves and ferns by the water, a forest belt thinning towards the tree line, all swaying with the wind
 - ☁️ Condensation at the dew point, with a flat cloud base that rises and falls with humidity
@@ -24,6 +24,7 @@ An interactive 3D simulation of the water cycle: evaporation, condensation, prec
 - 🧊 Freezing cloud: molecules lock into a hexagonal ice lattice on a dust grain and grow into a six-sided snowflake
 - 🌧️ Rain on the plains and ❄️ snow on the freezing peaks, switching with temperature
 - 🌊 Runoff through rivers and groundwater seeping through the rock, back to the sea
+- 🌫️ Sea mist that appears only near saturation (vapour itself is invisible), and ripples where rain lands on water
 - 🌡️ Live readings: dew point, cloud-base height, air temperature with height, and a water budget
 - 🎓 Teach mode: evaporation, condensation and precipitation, one step at a time
 - 📴 Works offline as a single HTML file

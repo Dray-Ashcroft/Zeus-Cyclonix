@@ -102,6 +102,12 @@ const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true; controls.minDistance=8; controls.maxDistance=80; controls.maxPolarAngle=Math.PI*0.495;
 const hemi=new THREE.HemisphereLight(0xffffff,0x4d5d49,1.5); scene.add(hemi);
 const sunLight=new THREE.DirectionalLight(0xfff1d6,2.2); sunLight.position.set(-8,22,14); scene.add(sunLight);
+// soft sun shadows: trees, crops and mountains shade the land. The sun and the land stay still, so the shadow map is drawn
+// once after loading (and again when the plants are planted), which costs almost nothing per frame
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate=false;
+sunLight.castShadow=true; sunLight.target.position.set(0,3,0); scene.add(sunLight.target);
+{ const sc=sunLight.shadow, c=sc.camera; sc.mapSize.set(2048,2048); c.left=-14; c.right=14; c.top=14; c.bottom=-14; c.near=2; c.far=60; sc.bias=-0.0006; sc.normalBias=0.025; sc.radius=2.5; c.updateProjectionMatrix(); }
+const refreshShadows=()=>{ renderer.shadowMap.needsUpdate=true; };
 
 const pointMats=[];
 let ptScale=1;
@@ -315,7 +321,7 @@ function stepPrecip(dt){
   for(const p of R.list){
     p.y-=p.vy*dt; p.z+=wz*dt*2;
     const g=groundY(p.x,p.z);
-    if(p.y<=g+0.03){ if(Math.random()<0.5&&SP.list.length<260) SP.list.push({x:p.x,y:g+0.04,z:p.z,age:0}); onRainLand(p.x,g,p.z,p.ci); continue; }
+    if(p.y<=g+0.03){ if(Math.random()<0.5&&SP.list.length<260) SP.list.push({x:p.x,y:g+0.04,z:p.z,age:0}); if(isWater(p.x,p.z)) addRipple(p.x,g,p.z); onRainLand(p.x,g,p.z,p.ci); continue; }
     R.list[w++]=p;
   }
   R.list.length=w; w=0;
@@ -369,26 +375,50 @@ function stepClouds(dt){
   }
 }
 
-/* ---------- Sun's rays: stronger with the Sun's heat slider ---------- */
-const RAYS={group:new THREE.Group(),beams:[],time:0,on:true,vis:1,sun:new THREE.Vector3(-4.41,13.17,8.42)};
+/* ---------- Sun's rays: stronger with the Sun's heat slider ----------
+   A burst of pointed rays radiates from the Sun in every direction, and light shafts carry its energy down to the sea, the plains
+   and the lake. A hotter Sun shows more, longer and brighter rays and a wider glow; a weaker Sun shows fewer and fainter ones. */
+const RAYS={group:new THREE.Group(),beams:[],time:0,on:true,vis:1,k:0.5,sun:new THREE.Vector3(-4.41,13.17,8.42)};
 scene.add(RAYS.group);
 {
-  // where each ray lands: mostly the sea, some on the plains and the lake (in the order they switch on)
+  // where each shaft lands: mostly the sea, some on the plains and the lake (in the order they switch on)
   const T=[[-1.5,2.57,8.0],[2.5,2.57,7.2],[-3.4,3.1,2.6],[0.6,2.57,9.6],[-0.4,3.12,-0.2],[3.9,2.57,9.3],[-3.6,2.57,6.4],
            [1.6,3.2,1.2],[1.1,2.57,6.2],[4.2,2.57,6.6],[-2.4,2.57,9.9],[3.4,3.25,-2.2],[-0.8,2.57,6.8],[2.8,2.57,10.3]];
-  const geo=new THREE.CylinderGeometry(1,1,1,8,1,true), cone=new THREE.ConeGeometry(1,1,10);
+  // each shaft is wide at the Sun and narrows to a sharp point where it lands
+  const geo=new THREE.CylinderGeometry(0,1,1,10,1,true);
   for(const tp of T){
-    const mat=new THREE.ShaderMaterial({uniforms:{uTime:{value:0},uOp:{value:0},uSpeed:{value:1}},transparent:true,depthWrite:false,
+    const mat=new THREE.ShaderMaterial({uniforms:{uTime:{value:0},uOp:{value:0},uSpeed:{value:1}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
       vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
       fragmentShader:`uniform float uTime,uOp,uSpeed;varying vec2 vUv;
-        void main(){float f=fract(vUv.y*7.0-uTime*uSpeed);float dash=smoothstep(0.30,0.45,f)*(1.0-smoothstep(0.55,0.72,f));
-        float ends=smoothstep(0.0,0.12,vUv.y)*smoothstep(1.0,0.9,vUv.y);
-        vec3 col=mix(vec3(1.0,0.70,0.16),vec3(1.0,0.93,0.55),dash);
-        gl_FragColor=vec4(col,(0.38+0.62*dash)*uOp*ends);}`});
-    const beam=new THREE.Mesh(geo,mat); beam.frustumCulled=false;
-    const head=new THREE.Mesh(cone,new THREE.MeshBasicMaterial({color:0xf2a51e,transparent:true,opacity:0,depthWrite:false}));
-    RAYS.group.add(beam,head); RAYS.beams.push({to:new THREE.Vector3(...tp),beam,head,mat,op:0});
+        void main(){float f=fract(vUv.y*6.0-uTime*uSpeed);float pulse=smoothstep(0.25,0.5,f)*(1.0-smoothstep(0.5,0.78,f));
+        float ends=smoothstep(0.0,0.08,vUv.y)*smoothstep(1.0,0.82,vUv.y);
+        vec3 col=mix(vec3(1.0,0.62,0.14),vec3(1.0,0.95,0.62),pulse);
+        gl_FragColor=vec4(col*(0.55+0.45*pulse),(0.35+0.65*pulse)*uOp*ends);}`});
+    const beam=new THREE.Mesh(geo,mat); beam.frustumCulled=false; beam.renderOrder=4;
+    RAYS.group.add(beam); RAYS.beams.push({to:new THREE.Vector3(...tp),beam,mat,op:0});
   }
+  // the light around the Sun: many fine, faint streaks of very uneven length (not petals), always facing the viewer;
+  // the golden-angle order spreads them evenly as more switch on
+  const NR=72, pos=[], idx=[], aI=[], aR=[];
+  for(let i=0;i<NR;i++){ const b=i*4, r=Math.random();
+    for(const [x,y] of [[-0.5,0],[0.5,0],[0.5,1],[-0.5,1]]){ pos.push(x,y,0); aI.push(i); aR.push(r); }
+    idx.push(b,b+1,b+2,b,b+2,b+3); }
+  const bg=new THREE.BufferGeometry(); bg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); bg.setIndex(idx);
+  bg.setAttribute('aI',new THREE.Float32BufferAttribute(aI,1)); bg.setAttribute('aR',new THREE.Float32BufferAttribute(aR,1));
+  RAYS.burstU={uTime:{value:0},uN:{value:12},uLen:{value:2},uW:{value:0.25},uR0:{value:1.2},uOp:{value:0.8}};
+  const bm=new THREE.ShaderMaterial({uniforms:RAYS.burstU,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+    vertexShader:`attribute float aI,aR; uniform float uTime,uN,uLen,uW,uR0; varying float vT,vX,vOn;
+      void main(){
+        float a=fract(aI*0.6180339)*6.2832+uTime*0.04;
+        float q=fract(aR*7.31); float len=uLen*(0.25+0.75*q*q*q)*(0.85+0.15*sin(uTime*1.3+aR*31.0));   // mostly short, a few long, gently flickering
+        float w=uW*(1.0-position.y);                                                   // narrows to a sharp point
+        vec2 p=vec2(position.x*w, uR0+position.y*len); float c=cos(a), s=sin(a);
+        vT=position.y; vX=position.x*2.0; vOn=clamp(uN-aI,0.0,1.0);
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(c*p.x-s*p.y, s*p.x+c*p.y, 0.0, 1.0); }`,
+    fragmentShader:`uniform float uOp; varying float vT,vX,vOn;
+      void main(){ float a=uOp*vOn*pow(1.0-vT,2.4)*(1.0-vX*vX)*smoothstep(0.0,0.1,vT); if(a<=0.002) discard;
+        gl_FragColor=vec4(mix(vec3(1.0,0.96,0.8),vec3(1.0,0.78,0.4),vT),a); }`});
+  RAYS.burst=new THREE.Mesh(bg,bm); RAYS.burst.frustumCulled=false; RAYS.burst.renderOrder=5; RAYS.group.add(RAYS.burst);
   // soft glow around the Sun, hidden behind the Sun's sphere where they overlap
   const cv=document.createElement('canvas'); cv.width=cv.height=128; const g=cv.getContext('2d');
   const rg=g.createRadialGradient(64,64,8,64,64,64); rg.addColorStop(0,'rgba(255,214,90,0.95)'); rg.addColorStop(0.45,'rgba(255,200,70,0.35)'); rg.addColorStop(1,'rgba(255,190,60,0)');
@@ -396,30 +426,36 @@ scene.add(RAYS.group);
   const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
   RAYS.halo=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false,opacity:0}));
   RAYS.group.add(RAYS.halo);
+  RAYS.corona=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:0xfff3d0,transparent:true,depthWrite:false,opacity:0,blending:THREE.AdditiveBlending}));
+  RAYS.group.add(RAYS.corona);
 }
 const _up=new THREE.Vector3(0,1,0), _d=new THREE.Vector3(), _a=new THREE.Vector3();
 function updateRays(dt,raw){
   if(B.sun) B.sun.getWorldPosition(RAYS.sun);
-  const k=clamp((S.T-10)/35,0,1);              // 0 at 10 °C, 1 at 45 °C
+  RAYS.k=lerp(RAYS.k,clamp((S.T-10)/35,0,1),1-Math.exp(-3*raw));   // 0 at 10 °C, 1 at 45 °C, eased so a slider change grows or fades visibly
+  const k=RAYS.k;
   RAYS.vis=lerp(RAYS.vis,RAYS.on?1:0,1-Math.exp(-5*raw));
   RAYS.group.visible=RAYS.vis>0.01;
   if(!RAYS.group.visible) return;
   RAYS.time+=dt;
-  const n=4+10*k, speed=0.7+1.6*k, rad=0.035+0.05*k, sunR=1.15*(0.85+0.25*k);
+  const n=3+11*k, speed=0.6+1.8*k, rad=0.05+0.1*k, sunR=1.15*(0.85+0.25*k);
   RAYS.beams.forEach((r,i)=>{
-    const want=clamp(n-i,0,1)*(0.45+0.5*k);
+    const want=clamp(n-i,0,1)*(0.3+0.7*k);
     r.op=lerp(r.op,want,1-Math.exp(-4*raw)); const op=r.op*RAYS.vis;
     _d.subVectors(r.to,RAYS.sun); const len=_d.length(); _d.divideScalar(len);
-    const startOff=sunR+0.15, endOff=0.32, L=Math.max(0.1,len-startOff-endOff);
+    const startOff=sunR+0.1, L=Math.max(0.1,len-startOff-0.02);
     _a.copy(RAYS.sun).addScaledVector(_d,startOff+L/2);
     r.beam.position.copy(_a); r.beam.quaternion.setFromUnitVectors(_up,_d); r.beam.scale.set(rad,L,rad);
     r.mat.uniforms.uTime.value=RAYS.time; r.mat.uniforms.uSpeed.value=speed; r.mat.uniforms.uOp.value=op;
-    r.head.position.copy(r.to).addScaledVector(_d,-endOff/2-0.02); r.head.quaternion.setFromUnitVectors(_up,_d);
-    r.head.scale.set(rad*3.2,endOff,rad*3.2); r.head.material.opacity=op*1.1;
-    r.beam.visible=r.head.visible=op>0.01;
+    r.beam.visible=op>0.01;
   });
-  RAYS.halo.position.copy(RAYS.sun); const hs=3.2+3.2*k; RAYS.halo.scale.set(hs,hs,1);
-  RAYS.halo.material.opacity=(0.35+0.55*k)*RAYS.vis;
+  // the burst faces the viewer and grows with the Sun's heat: more rays, longer, wider and brighter
+  RAYS.burst.position.copy(RAYS.sun); RAYS.burst.quaternion.copy(camera.quaternion);
+  const U=RAYS.burstU; U.uTime.value=RAYS.time; U.uN.value=24+48*k; U.uLen.value=1.4+3.6*k; U.uW.value=0.045+0.045*k; U.uR0.value=sunR*1.0; U.uOp.value=(0.3+0.4*k)*RAYS.vis;
+  // the glow and a wide, faint corona carry most of the intensity: a hotter Sun glows larger and brighter
+  RAYS.halo.position.copy(RAYS.sun); const hs=3.0+5.0*k; RAYS.halo.scale.set(hs,hs,1);
+  RAYS.halo.material.opacity=(0.45+0.5*k)*RAYS.vis;
+  RAYS.corona.position.copy(RAYS.sun); const cs=6+9*k; RAYS.corona.scale.set(cs,cs,1); RAYS.corona.material.opacity=(0.12+0.3*k)*RAYS.vis;
 }
 
 /* ---------- Condensation level marker ---------- */
@@ -487,16 +523,26 @@ function patchCloudMaterial(mat){
    no part in the water cycle, so the lowest band of the cut-away is repainted as ordinary dark rock. */
 function patchRock(mat){
   mat.onBeforeCompile=sh=>{
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying float vWY;')
-      .replace('#include <project_vertex>','#include <project_vertex>\nvWY=(modelMatrix*vec4(transformed,1.0)).y;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vWY;')
+    sh.uniforms.uWetT=WETU.tex; sh.uniforms.uWetR=WETU.rect; sh.uniforms.uWetA=WETU.amt;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying float vWY; varying vec2 vWXZ;')
+      .replace('#include <project_vertex>','#include <project_vertex>\nvec4 wq=modelMatrix*vec4(transformed,1.0); vWY=wq.y; vWXZ=wq.xz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vWY; varying vec2 vWXZ; uniform sampler2D uWetT; uniform vec4 uWetR; uniform float uWetA;')
       .replace('#include <map_fragment>',`#include <map_fragment>
         float rRed=max(smoothstep(0.03,0.12,diffuseColor.r-max(diffuseColor.g,diffuseColor.b)*1.25),
           smoothstep(1.35,1.8,diffuseColor.r/max(max(diffuseColor.g,diffuseColor.b),0.01))*smoothstep(0.015,0.04,diffuseColor.r))*step(vWY,2.3);   // even dim red, judged by hue
         float rockK=max(smoothstep(1.5,1.0,vWY),rRed);
         float rLum=dot(diffuseColor.rgb,vec3(0.299,0.587,0.114));
-        diffuseColor.rgb=mix(diffuseColor.rgb, vec3(0.040,0.036,0.033)+rLum*vec3(0.10,0.092,0.085), rockK);`)
-      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nfloat eRed=smoothstep(0.015,0.08,totalEmissiveRadiance.r-max(totalEmissiveRadiance.g,totalEmissiveRadiance.b)*1.2);\ntotalEmissiveRadiance*=(1.0-smoothstep(1.6,1.05,vWY))*(1.0-rockK)*(1.0-eRed);   // no magma glow on any face');
+        diffuseColor.rgb=mix(diffuseColor.rgb, vec3(0.040,0.036,0.033)+rLum*vec3(0.10,0.092,0.085), rockK);
+        float wetB=texture2D(uWetT,(vWXZ-uWetR.xy)*uWetR.zw).r*uWetA*(1.0-rockK)*step(1.6,vWY);   // damp soil along the banks
+        diffuseColor.rgb*=1.0-0.38*wetB;`)
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nfloat eRed=smoothstep(0.015,0.08,totalEmissiveRadiance.r-max(totalEmissiveRadiance.g,totalEmissiveRadiance.b)*1.2);\ntotalEmissiveRadiance*=(1.0-smoothstep(1.6,1.05,vWY))*(1.0-rockK)*(1.0-eRed)*(1.0-0.38*wetB);   // no magma glow on any face; damp banks darker')
+      // the land's colour comes from its baked glow rather than the sun, so the sun's shadow dims that glow: trees, crops and peaks shade the ground
+      .replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+        #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+          DirectionalLightShadow dls0=directionalLightShadows[0];
+          float shF=getShadow(directionalShadowMap[0],dls0.shadowMapSize,dls0.shadowBias,dls0.shadowRadius,vDirectionalShadowCoord[0]);
+          totalEmissiveRadiance*=mix(0.38,1.0,shF); reflectedLight.indirectDiffuse*=mix(0.6,1.0,shF);
+        #endif`);
   };
   mat.needsUpdate=true;
 }
@@ -551,6 +597,8 @@ function onModel(gltf){
     patchCloudMaterial(cloudMesh.material);
   }
   for(const m of skinned) if(/^mesh_[01]$/.test(m.name)) patchRock(m.material);
+  root.traverse(o=>{ if(!o.isMesh) return; if(/^mesh_[01]$/.test(o.name)){ o.castShadow=true; o.receiveShadow=true; } else if(/^water_body/.test(o.name)) o.receiveShadow=true; });
+  refreshShadows();
   // sharper ground when the camera looks across the land at a low angle
   root.traverse(o=>{ if(o.isMesh&&o.material&&o.material.map){ o.material.map.anisotropy=MAX_ANISO; o.material.map.needsUpdate=true; } });
   root.traverse(o=>{ if(o.isMesh&&/^side_water/.test(o.name)) patchGroundwater(o); });
@@ -649,7 +697,7 @@ const CLOUD_THIN=3;
 function onSun(g){
   const grp=new THREE.Group(); const sc=g.scene;
   const box=new THREE.Box3().setFromObject(sc), c=box.getCenter(new THREE.Vector3()), r=box.getSize(new THREE.Vector3()).x/2;
-  sc.position.sub(c); sc.scale.multiplyScalar(1/r); grp.add(sc);
+  sc.position.sub(c).divideScalar(r); sc.scale.multiplyScalar(1/r); grp.add(sc);   // centre after scaling, so the glow and rays sit exactly around the ball
   sc.traverse(o=>{ if(o.isMesh){ o.material=new THREE.MeshBasicMaterial({map:o.material.map,color:0xffffff}); o.frustumCulled=false; } });
   scene.add(grp); NEW.sun=grp;
 }
@@ -792,7 +840,7 @@ function updateFlow(dt,raw){
 }
 const _ax=new THREE.Vector3(-1,0,0), _q=new THREE.Quaternion(), _m4=new THREE.Matrix4(), _s3=new THREE.Vector3(), _p3=new THREE.Vector3(), _vd=new THREE.Vector3();
 function updateNewModels(dt,raw){
-  updatePlants(dt);
+  updatePlants(dt); updateDetail(dt);
   const k=clamp((S.T-10)/35,0,1);
   if(NEW.sun){ NEW.sun.position.copy(RAYS.sun); NEW.sun.scale.setScalar(1.1*(0.85+0.25*k)); NEW.sun.rotation.y+=dt*0.08; }
   if(NEW.clouds){
@@ -1048,6 +1096,66 @@ function exitTeach(){
   S.focus='all'; showInfo('all'); goTo('all');
 }
 
+/* ---------- Scene detail: rain ripples, sea mist, wet banks and boulders ---------- */
+// ripples: every raindrop that lands on the lake, a river or the sea starts a ring that spreads and fades
+const RIP={N:120,i:0,t:new Float32Array(120).fill(1),mesh:null};
+{ const g=new THREE.RingGeometry(0.78,1,40); g.rotateX(-Math.PI/2);
+  const m=new THREE.ShaderMaterial({uniforms:{uC:{value:new THREE.Color(0xeaf6ff)}},transparent:true,depthWrite:false,
+    vertexShader:`attribute float aT; varying float vA;
+      void main(){ vec3 p=position*mix(0.012,0.15,aT); vA=aT<1.0?(1.0-aT)*(1.0-aT):0.0; gl_Position=projectionMatrix*viewMatrix*(instanceMatrix*vec4(p,1.0)); }`,
+    fragmentShader:`uniform vec3 uC; varying float vA; void main(){ if(vA<=0.0) discard; gl_FragColor=vec4(uC,vA*0.8); }`});
+  const im=new THREE.InstancedMesh(g,m,RIP.N); im.frustumCulled=false; im.renderOrder=2;
+  im.geometry.setAttribute('aT',new THREE.InstancedBufferAttribute(RIP.t,1).setUsage(THREE.DynamicDrawUsage)); scene.add(im); RIP.mesh=im; }
+const _rm=new THREE.Matrix4();
+function addRipple(x,y,z){ const k=RIP.i=(RIP.i+1)%RIP.N; RIP.t[k]=0; _rm.makeTranslation(x,y+0.012,z); RIP.mesh.setMatrixAt(k,_rm); RIP.mesh.instanceMatrix.needsUpdate=true; }
+
+// sea mist: water vapour itself is invisible; a mist appears only when the air over the sea is close to saturation
+const MIST=[];
+{ const cv=document.createElement('canvas'); cv.width=cv.height=128; const c=cv.getContext('2d'), gr=c.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.5,'rgba(255,255,255,.45)'); gr.addColorStop(1,'rgba(255,255,255,0)'); c.fillStyle=gr; c.fillRect(0,0,128,128);
+  const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
+  for(let i=0;i<16;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:0xf4f8fb,transparent:true,depthWrite:false,opacity:0}));
+    s.position.set(lerp(-5.6,5.8,Math.random()),lerp(2.72,2.95,Math.random()),lerp(6.2,10.4,Math.random())); s.scale.set(lerp(2.6,4.2,Math.random()),lerp(0.55,0.85,Math.random()),1);
+    s.userData.o=0.7+Math.random()*0.6; s.renderOrder=3; scene.add(s); MIST.push(s); } }
+
+// wet banks: soil near the water is darker, and darker still after rain has run off
+const WETU={tex:{value:null},rect:{value:new THREE.Vector4(0,0,1,1)},amt:{value:0.55}};
+function buildWetTex(){
+  const M=VEG.map; if(!M) return; const d=new Uint8Array(M.nx*M.nz*4);
+  for(let k=0;k<M.nx*M.nz;k++){ const w=M.WET[k]?0:Math.max(0,1-M.D[k]*M.cs/0.22); d[k*4]=d[k*4+1]=d[k*4+2]=Math.round(255*w*w*(3-2*w)); d[k*4+3]=255; }
+  const t=new THREE.DataTexture(d,M.nx,M.nz,THREE.RGBAFormat); t.magFilter=t.minFilter=THREE.LinearFilter; t.needsUpdate=true;
+  WETU.tex.value=t; WETU.rect.value.set(M.x0,M.z0,1/(M.nx*M.cs),1/(M.nz*M.cs));
+}
+
+// boulders: rough, faceted rocks on the bare mountain slopes and scattered along the river banks
+function rockGeo(seed){
+  const g=new THREE.IcosahedronGeometry(1,1), p=g.attributes.position, v=new THREE.Vector3();
+  const h=(x,y,z)=>{ const s=Math.sin(x*12.9898+y*78.233+z*37.719+seed*11.3)*43758.5453; return s-Math.floor(s); };
+  for(let i=0;i<p.count;i++){ v.fromBufferAttribute(p,i); const k=0.78+0.4*h(Math.round(v.x*100),Math.round(v.y*100),Math.round(v.z*100)); v.multiplyScalar(k); v.y*=0.62; p.setXYZ(i,v.x,v.y,v.z); }
+  g.computeVertexNormals(); return g;
+}
+function placeBoulders(rnd){
+  const geos=[rockGeo(1),rockGeo(2),rockGeo(3)], mat=new THREE.MeshStandardMaterial({color:0x6f675e,roughness:0.95,metalness:0,flatShading:true});
+  const L=[[],[],[]], X0=-5.6,X1=5.95,Z0=-10.9,Z1=6.0;
+  const add=(x,z,s,size)=>{ L[(rnd()*3)|0].push([x,s.y-size*0.22,z,size,rnd()*6.283,0.85+rnd()*0.3]); };
+  let n=0; for(let t=0;t<40000&&n<120;t++){ const x=lerp(X0,X1,rnd()), z=lerp(Z0,Z1,rnd()), s=vegAt(x,z);
+    if(!s||s.wet||s.y<3.5||s.L>165||s.ny<0.4||!(s.bare||s.green<-0.02)) continue; if(rnd()>0.55) continue; add(x,z,s,lerp(0.05,0.13,rnd())); n++; }
+  n=0; for(let t=0;t<40000&&n<45;t++){ const x=lerp(X0,X1,rnd()), z=lerp(Z0,Z1,rnd()), s=vegAt(x,z);
+    if(!s||s.wet||s.dw>0.1||s.y<2.8||s.ny<0.6) continue; add(x,z,s,lerp(0.022,0.04,rnd())); n++; }
+  const m4=new THREE.Matrix4(), q=new THREE.Quaternion(), e=new THREE.Euler(), pv=new THREE.Vector3(), sv=new THREE.Vector3(), col=new THREE.Color();
+  L.forEach((list,i)=>{ if(!list.length) return; const im=new THREE.InstancedMesh(geos[i],mat,list.length); im.name='rocks'; im.castShadow=true; im.frustumCulled=false;
+    list.forEach((a,j)=>{ e.set(0,a[4],0); q.setFromEuler(e); pv.set(a[0],a[1],a[2]); sv.set(a[3],a[3],a[3]*lerp(0.8,1.2,rnd())); m4.compose(pv,q,sv); im.setMatrixAt(j,m4); col.setRGB(a[5],a[5]*0.98,a[5]*0.95); im.setColorAt(j,col); });
+    VEG.grp.add(im); });
+}
+function updateDetail(dt){
+  if(RIP.mesh){ let any=false; for(let i=0;i<RIP.N;i++) if(RIP.t[i]<1){ RIP.t[i]=Math.min(1,RIP.t[i]+dt/1.1); any=true; } if(any) RIP.mesh.geometry.attributes.aT.needsUpdate=true; }
+  const fog=0.05+0.32*smooth(72,97,S.RH);
+  for(const s of MIST){ s.position.z-=0.012*S.wind*dt; s.position.x+=Math.sin(s.position.z*0.7)*0.02*dt;
+    if(s.position.z<5.6){ s.position.z=10.4; s.position.x=lerp(-5.6,5.8,Math.random()); }
+    const edge=smooth(5.6,6.6,s.position.z)*smooth(10.6,9.6,s.position.z); s.material.opacity=fog*s.userData.o*edge; }
+  WETU.amt.value+=((0.55+0.45*clamp(S.flowR/12,0,1))-WETU.amt.value)*Math.min(1,dt*0.5);
+}
+
 /* ---------- Plants, placed by vegetation zone ----------
    The landscape's own photo texture decides where plants grow: green ground gets plants, while sand, bare rock,
    snow and water stay bare. Maize fields and meadows cover the plains, reeds and ferns line the lake and river,
@@ -1118,7 +1226,7 @@ function onPlants(g){   // from the plant set: ferns and white wildflowers
 }
 function onTrees(g){   // broadleaf trees with full crowns (a round-crowned and a slender form) and chunky grass tufts
   const parts=bakeParts(g), grp=n=>parts.filter(p=>p.grp===n).map(p=>({geo:p.geo,mat:p.mat}));
-  VEG.sp.tree={v:['Bark001_2669','Bark_2671'].map(n=>normVariant(grp(n))).filter(v=>v.parts.length),stiff:0.3,tintAll:1.1};
+  VEG.sp.tree={v:['Bark001_2669','Bark_2671'].map(n=>normVariant(grp(n))).filter(v=>v.parts.length),stiff:0.3,tintAll:1.2};
   VEG.sp.tuft={v:['Grass_B_Low_Dense_2','Grass_B_Low_Dense024_3','Grass_B_Low_Small_1','Grass_B_Low_Small092_4'].map(n=>normVariant(grp(n))).filter(v=>v.parts.length),stiff:1};
   plantAll();
 }
@@ -1164,6 +1272,18 @@ function buildVegMap(){
     C[k*3]=px[q]; C[k*3+1]=px[q+1]; C[k*3+2]=px[q+2];
     const x=x0+((k%nx)+0.5)*cs, z=z0+(Math.floor(k/nx)+0.5)*cs;
     if(isWater(x,z)||(px[q+2]>px[q+1]+6&&px[q+2]>px[q]+20)) WET[k]=1; }
+  // the lake's own water surface, traced exactly (the colour test alone misses its shallow, sandy-looking edge)
+  root.traverse(o=>{ if(!o.isMesh||!/^water_body/.test(o.name)) return;
+    if(o.skeleton) o.skeleton.update(); const pa=o.geometry.attributes.position, ia=o.geometry.index, n=pa.count, Q=new Float32Array(n*3);
+    for(let i=0;i<n;i++){ o.getVertexPosition(i,v); v.applyMatrix4(o.matrixWorld); Q[i*3]=v.x; Q[i*3+1]=v.y; Q[i*3+2]=v.z; }
+    const nT=ia?ia.count/3:n/3, id=k=>ia?ia.getX(k):k;
+    for(let t=0;t<nT;t++){ const a=id(t*3),b=id(t*3+1),c=id(t*3+2);
+      const ax=Q[a*3],az=Q[a*3+2], e1x=Q[b*3]-ax,e1z=Q[b*3+2]-az, e2x=Q[c*3]-ax,e2z=Q[c*3+2]-az, det=e1x*e2z-e2x*e1z;
+      if(Math.min(Q[a*3+1],Q[b*3+1],Q[c*3+1])<2.3||Math.abs(det)<1e-12) continue;    // the lake, not the sea
+      const i0=Math.max(0,Math.floor((Math.min(ax,Q[b*3],Q[c*3])-x0)/cs)), i1=Math.min(nx-1,Math.floor((Math.max(ax,Q[b*3],Q[c*3])-x0)/cs));
+      const j0=Math.max(0,Math.floor((Math.min(az,Q[b*3+2],Q[c*3+2])-z0)/cs)), j1=Math.min(nz-1,Math.floor((Math.max(az,Q[b*3+2],Q[c*3+2])-z0)/cs));
+      for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){ const px=x0+(i+0.5)*cs-ax, pz=z0+(j+0.5)*cs-az, s=(px*e2z-e2x*pz)/det, r=(e1x*pz-px*e1z)/det;
+        if(s>=-0.02&&r>=-0.02&&s+r<=1.02) WET[j*nx+i]=1; } } });
   // distance to open water (lake, river, sea) by a breadth-first sweep, in grid cells
   const D=new Uint16Array(N).fill(65535), Q=new Int32Array(N); let qh=0,qt=0;
   for(let k=0;k<N;k++) if(WET[k]){ D[k]=0; Q[qt++]=k; }
@@ -1213,15 +1333,16 @@ function plantAll(){
   const vi=sp=>(rnd()*VEG.sp[sp].v.length)|0;
   // 2. broadleaf trees. Groves line the lake and rivers, where roots reach water; a few stand alone in the meadows;
   //    on the mountains a forest belt climbs the lower slopes, thinning out and getting smaller towards the tree line
-  const tree=(x,z,s,size)=>{ if(!free(x,z,size*0.28)) return false;
+  // a tree stands back from the water far enough that its crown never hangs over the lake or a river
+  const tree=(x,z,s,size)=>{ if(s.dw<size*0.45+0.06||!free(x,z,size*0.28)) return false;
     const k=0.9+rnd()*0.2; put('tree',vi('tree'),x,s.y-0.01,z,size,false,[k*(0.92+0.1*rnd()),k,k*(0.85+0.1*rnd())]); take(x,z,size*0.28); return true; };
-  scatter(90,50000,(x,z,s)=>{ if(s.wet||s.bare||s.dw<0.1||s.dw>0.75||s.ny<0.7||s.y<2.65||s.y>3.6) return false;
-    if(rnd()>smooth(0.35,0.7,vnoise(x*1.3+3,z*1.3+7))) return false; return tree(x,z,s,lerp(0.34,0.48,rnd())); });
-  scatter(22,30000,(x,z,s)=>{ if(s.wet||s.bare||s.dw<0.5||s.ny<0.9||s.green<0.0||s.y<2.7||s.y>3.5) return false; return tree(x,z,s,lerp(0.4,0.52,rnd())); });
+  scatter(90,50000,(x,z,s)=>{ if(s.wet||s.bare||s.dw>0.9||s.ny<0.7||s.y<2.65||s.y>3.6) return false;
+    if(rnd()>smooth(0.35,0.7,vnoise(x*1.3+3,z*1.3+7))) return false; return tree(x,z,s,lerp(0.46,0.62,rnd())); });
+  scatter(22,30000,(x,z,s)=>{ if(s.wet||s.bare||s.dw<0.5||s.ny<0.9||s.green<0.0||s.y<2.7||s.y>3.5) return false; return tree(x,z,s,lerp(0.52,0.66,rnd())); });
   scatter(170,50000,(x,z,s)=>{
     if(s.bare||s.wet||s.ny<0.55||s.y<3.5||s.y>4.95||s.green<-0.03) return false;
     const up=smooth(4.2,4.95,s.y), p=(1-up)*smooth(0.3,0.68,vnoise(x*0.9,z*0.9));
-    if(rnd()>p) return false; return tree(x,z,s,lerp(0.36,0.5,rnd())*(1-0.5*up)); });
+    if(rnd()>p) return false; return tree(x,z,s,lerp(0.46,0.62,rnd())*(1-0.45*up)); });
 
   // 3. clover and ferns where the soil stays moist; ferns also grow in the shade of the forest
   scatter(45,40000,(x,z,s)=>{ if(s.wet||s.dw<0.04||s.dw>0.7||s.ny<0.85||s.bare||s.y<2.65||s.y>4.3) return false;
@@ -1258,6 +1379,9 @@ function plantAll(){
           const c=a[9]||[1,1,1]; col.setRGB(a[8]*c[0],a[8]*c[1]*(0.98+0.04*Math.sin(a[1]*3)),a[8]*c[2]*0.97); im.setColorAt(i,col); });
         im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true; im.userData.full=L.length; grp.add(im); VEG.ims.push(im); } }); }
   VEG.counts=Object.fromEntries(Object.entries(out).map(([k,v])=>[k,v.length]));
+  for(const im of VEG.ims) im.castShadow=/tree|maize|fern/.test(im.name);   // small tufts and flowers cast too little shade to matter
+  buildWetTex(); placeBoulders(rnd);
+  refreshShadows();
 }
 function updatePlants(dt){ if(!VEG.built) return; VEG.u.uTime.value+=dt; VEG.u.uWind.value+=(S.wind-VEG.u.uWind.value)*Math.min(1,dt*2);
   if(PERF.low&&!VEG.lowDone){ VEG.lowDone=true; for(const im of VEG.ims) if(/tree|maize|tuft|clover/.test(im.name)) im.count=Math.ceil(im.userData.full*0.6); } }
