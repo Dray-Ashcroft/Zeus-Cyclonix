@@ -14,6 +14,33 @@ The water cycle in 3D (evaporation, condensation, precipitation, runoff and grou
 
 ---
 
+📸 **Screenshots**
+
+<table width="100%">
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/screenshots/Intro.png" alt="Zeus Cyclonix, interactive water cycle simulator" width="100%">
+      <br><sub><b>Interactive Water Cycle Simulator</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/screenshots/Explore%20Cloud.png" alt="Condensation visualisation inside a cloud" width="100%">
+      <br><sub><b>Explore the Cloud · Condensation</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/screenshots/RunOff%20and%20Seepage.png" alt="Runoff and seepage visualisation" width="100%">
+      <br><sub><b>Runoff &amp; Seepage</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/screenshots/ThreeJS.png" alt="Crafted with Three.js models" width="100%">
+      <br><sub><b>Crafted with Three.js</b></sub>
+    </td>
+  </tr>
+</table>
+
+---
+
 ✨ **Features**
 
 - ☀️ Sun's heat slider: a brighter Sun, faster evaporation
